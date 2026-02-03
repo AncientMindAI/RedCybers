@@ -26,6 +26,13 @@ type EventItem = {
   threat_score?: number;
 };
 
+type FeedStatus = {
+  name: string;
+  last_count: number;
+  last_error: string;
+  next_run_in: number;
+};
+
 type Health = {
   collector: string;
   privileged: boolean;
@@ -34,6 +41,7 @@ type Health = {
   uptime_sec: number;
   host?: string;
   port?: number;
+  feeds?: FeedStatus[];
 };
 
 type Summary = {
@@ -213,6 +221,26 @@ export default function App() {
               ))}
               {(!summary?.alerts || summary.alerts.length === 0) && (
                 <div className="muted">No threat alerts yet</div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div className="panel-title">Feed Status</div>
+            <div className="space-y-2 text-sm">
+              {(health?.feeds ?? []).map((feed, idx) => (
+                <div key={idx} className="feed-row">
+                  <div>
+                    <div className="feed-title">{feed.name}</div>
+                    <div className="muted">
+                      {feed.last_error ? `error: ${feed.last_error}` : `${feed.last_count} IPs`}
+                    </div>
+                  </div>
+                  <div className="feed-next">{feed.next_run_in}s</div>
+                </div>
+              ))}
+              {(!health?.feeds || health.feeds.length === 0) && (
+                <div className="muted">No feeds configured</div>
               )}
             </div>
           </div>

@@ -99,7 +99,8 @@ body {
   color: rgba(255,255,255,0.5);
 }
 
-.alert-row {
+.alert-row,
+.feed-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -110,12 +111,14 @@ body {
   background: rgba(0,0,0,0.25);
 }
 
-.alert-title {
+.alert-title,
+.feed-title {
   font-weight: 600;
   color: #e6fff3;
 }
 
-.alert-score {
+.alert-score,
+.feed-next {
   min-width: 42px;
   text-align: center;
   padding: 6px 8px;
