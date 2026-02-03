@@ -40,6 +40,9 @@ class Event(BaseModel):
     relevance_score: int = 0
     suppressed: bool = False
     suppression_reason: str = ""
+    cve_matches: List[str] = Field(default_factory=list)
+    cve_max_severity: str = ""
+    cve_count: int = 0
 
     @staticmethod
     def now_iso() -> str:

@@ -62,6 +62,8 @@ class AppState:
             "cve_source_path": "",
             "cve_import_limit": 2000,
             "cve_min_year": 2020,
+            "cve_match_enabled": True,
+            "cve_min_severity": "HIGH",
         }
         self.status: Dict[str, object] = {
             "collector": "none",
@@ -87,6 +89,7 @@ class AppState:
         if self.enrichment is not None:
             self.enrichment.enrich(event)
         _apply_mitre_and_triage(event, self.config)
+        _apply_cve_match(event, self.config, self.cve_store)
 
     def enqueue(self, event: Event) -> None:
         self.buffer.append(event)
@@ -253,6 +256,33 @@ def _apply_mitre_and_triage(event: Event, config: Dict[str, object]) -> None:
         event.suppression_reason = "low-score"
 
 
+def _severity_rank(value: str) -> int:
+    order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+    return order.get(value.upper(), 0)
+
+
+def _apply_cve_match(event: Event, config: Dict[str, object], store: Optional[CVEStore]) -> None:
+    if store is None:
+        return
+    if not config.get("cve_match_enabled", True):
+        return
+    name = (event.process_name or "").strip()
+    if not name:
+        return
+    min_sev = str(config.get("cve_min_severity", "HIGH") or "HIGH").upper()
+    matches = store.match_for_process(name, min_sev=min_sev)
+    if not matches:
+        return
+    event.cve_matches = [m["cve_id"] for m in matches][:5]
+    event.cve_count = len(matches)
+    max_sev = ""
+    for row in matches:
+        sev = str(row.get("severity", "")).upper()
+        if _severity_rank(sev) > _severity_rank(max_sev):
+            max_sev = sev
+    event.cve_max_severity = max_sev
+
+
 def _write_port_file(port: int) -> None:
     path = _get_port_file()
     try:
@@ -279,6 +309,8 @@ def _summary(events: List[Event]) -> Dict[str, object]:
 
     threat_hits = sum(1 for e in public_events if e.threat_sources)
     suppressed_count = len([e for e in events if e.suppressed])
+    cve_high = sum(1 for e in visible if (e.cve_max_severity or "").upper() in ("CRITICAL", "HIGH"))
+    cve_medium = sum(1 for e in visible if (e.cve_max_severity or "").upper() == "MEDIUM")
 
     alerts = []
     for event in reversed(visible[-200:]):
@@ -318,6 +350,8 @@ def _summary(events: List[Event]) -> Dict[str, object]:
             tactic: [{"technique_id": k, "count": v} for k, v in counter.most_common(8)]
             for tactic, counter in breakdown.items()
         },
+        "cve_high_hits": cve_high,
+        "cve_medium_hits": cve_medium,
     }
 
 
@@ -378,6 +412,8 @@ def _build_pdf_report(events: List[Event], summary: Dict[str, object], health_pa
         ["Public events", str(summary.get("public_events", 0))],
         ["Threat hits", str(summary.get("threat_hits", 0))],
         ["Suppressed events", str(summary.get("suppressed_events", 0))],
+        ["CVE high hits", str(summary.get("cve_high_hits", 0))],
+        ["CVE medium hits", str(summary.get("cve_medium_hits", 0))],
     ]
     ops_table = Table(ops, colWidths=[2.1 * inch, 3.8 * inch])
     ops_table.setStyle(
@@ -762,11 +798,15 @@ async def export_xlsx(limit: int = 2000) -> Response:
         "relevance_score",
         "suppressed",
         "suppression_reason",
+        "cve_matches",
+        "cve_max_severity",
+        "cve_count",
     ]
     ws.append(headers)
     for event in events:
         data = event.model_dump()
         data["threat_sources"] = ",".join(event.threat_sources)
+        data["cve_matches"] = ",".join(event.cve_matches)
         ws.append([data.get(h, "") for h in headers])
 
     buf = BytesIO()

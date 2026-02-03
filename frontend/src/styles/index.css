@@ -348,6 +348,10 @@ body {
   opacity: 0.45;
 }
 
+.row-cve {
+  background: rgba(255, 89, 89, 0.08);
+}
+
 .row-detail td {
   background: rgba(0,0,0,0.25);
 }

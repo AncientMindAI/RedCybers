@@ -31,6 +31,9 @@ type EventItem = {
   relevance_score?: number;
   suppressed?: boolean;
   suppression_reason?: string;
+  cve_matches?: string[];
+  cve_max_severity?: string;
+  cve_count?: number;
 };
 
 type FeedStatus = {
@@ -60,6 +63,8 @@ type Summary = {
   mitre_tactics?: { tactic: string; count: number }[];
   mitre_techniques?: { technique_id: string; count: number }[];
   mitre_breakdown?: Record<string, { technique_id: string; count: number }[]>;
+  cve_high_hits?: number;
+  cve_medium_hits?: number;
   alerts: {
     ts: string;
     process_name: string;
@@ -88,6 +93,8 @@ type ConfigPayload = {
   cve_source_path?: string;
   cve_import_limit?: number;
   cve_min_year?: number;
+  cve_match_enabled?: boolean;
+  cve_min_severity?: string;
 };
 
 const API_PORT = (import.meta as any).env?.VITE_API_PORT ?? "8787";
@@ -541,6 +548,22 @@ export default function App() {
                 <label>CVE Import Limit</label>
                 <input className="input" type="number" min={100} max={100000} value={config.cve_import_limit ?? 2000} onChange={(e) => updateConfig("cve_import_limit", Number(e.target.value))} />
               </div>
+              <div className="field">
+                <label>Enable CVE Matching</label>
+                <select className="input" value={String(config.cve_match_enabled ?? true)} onChange={(e) => updateConfig("cve_match_enabled", e.target.value === "true")}>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Minimum CVE Severity</label>
+                <select className="input" value={String(config.cve_min_severity ?? "HIGH")} onChange={(e) => updateConfig("cve_min_severity", e.target.value)}>
+                  <option value="CRITICAL">CRITICAL</option>
+                  <option value="HIGH">HIGH</option>
+                  <option value="MEDIUM">MEDIUM</option>
+                  <option value="LOW">LOW</option>
+                </select>
+              </div>
             </div>
 
             <div className="row">
@@ -561,6 +584,8 @@ export default function App() {
                 <div>Public Events: {summary?.public_events ?? 0}</div>
                 <div>Threat Hits: {summary?.threat_hits ?? 0}</div>
                 <div>Suppressed: {summary?.suppressed_events ?? 0}</div>
+                <div>CVE High: {summary?.cve_high_hits ?? 0}</div>
+                <div>CVE Medium: {summary?.cve_medium_hits ?? 0}</div>
                 <div>Events (total): {health?.events_total ?? 0}</div>
                 <div>Events/sec: {health?.events_per_sec?.toFixed(1) ?? "-"}</div>
               </div>
@@ -744,6 +769,7 @@ export default function App() {
                     <th>Country</th>
                     <th>Org</th>
                     <th>ATT&CK</th>
+                    <th>CVE</th>
                     <th>Threats</th>
                     <th>Score</th>
                     <th>State</th>
@@ -755,7 +781,7 @@ export default function App() {
                     const expanded = expandedKey === key;
                     return (
                       <Fragment key={key}>
-                        <tr className={`row-click ${e.suppressed ? "row-suppressed" : ""}`} onClick={() => toggleRow(key)}>
+                        <tr className={`row-click ${e.suppressed ? "row-suppressed" : ""} ${e.cve_max_severity ? "row-cve" : ""}`} onClick={() => toggleRow(key)}>
                           <td>{new Date(e.ts).toLocaleTimeString()}</td>
                           <td>{e.process_name}</td>
                           <td>{e.pid}</td>
@@ -765,13 +791,14 @@ export default function App() {
                           <td>{e.remote_country || "-"}</td>
                           <td>{e.remote_org || "-"}</td>
                           <td>{e.mitre_technique_id || "-"}</td>
+                          <td>{e.cve_max_severity ? `${e.cve_max_severity} (${e.cve_count ?? 0})` : "-"}</td>
                           <td>{(e.threat_sources && e.threat_sources.length > 0) ? e.threat_sources.join(",") : "-"}</td>
                           <td>{e.threat_score ?? 0}</td>
                           <td>{e.state}</td>
                         </tr>
                         {expanded && (
                           <tr className="row-detail">
-                            <td colSpan={12}>
+                            <td colSpan={13}>
                               <div className="detail-grid">
                                 <div><span className="muted">Region:</span> {e.remote_region || "-"}</div>
                                 <div><span className="muted">City:</span> {e.remote_city || "-"}</div>
@@ -782,6 +809,7 @@ export default function App() {
                                 <div><span className="muted">ATT&CK:</span> {e.mitre_tactic || "-"} {e.mitre_technique_id ? `(${e.mitre_technique_id})` : ""}</div>
                                 <div><span className="muted">Relevance:</span> {e.relevance_score ?? 0}</div>
                                 <div><span className="muted">Suppressed:</span> {e.suppressed ? e.suppression_reason || "yes" : "no"}</div>
+                                <div><span className="muted">CVE:</span> {e.cve_max_severity || "-"} {e.cve_matches && e.cve_matches.length ? e.cve_matches.join(",") : ""}</div>
                               </div>
                             </td>
                           </tr>

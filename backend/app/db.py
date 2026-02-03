@@ -61,6 +61,9 @@ class DBWriter:
             Column("relevance_score", Integer),
             Column("suppressed", Integer),
             Column("suppression_reason", String(64)),
+            Column("cve_matches", Text),
+            Column("cve_max_severity", String(16)),
+            Column("cve_count", Integer),
         )
         self._queue: queue.Queue[Event] = queue.Queue(maxsize=10000)
         self._stop_event = threading.Event()
@@ -125,7 +128,7 @@ class DBWriter:
                    remote_country, remote_region, remote_city, remote_org, remote_asn,
                    remote_hostname, remote_loc, remote_timezone, threat_sources, threat_score,
                    mitre_tactic, mitre_technique, mitre_technique_id, mitre_confidence,
-                   relevance_score, suppressed, suppression_reason
+                   relevance_score, suppressed, suppression_reason, cve_matches, cve_max_severity, cve_count
             FROM events
             WHERE {where}
             ORDER BY ts DESC
@@ -190,6 +193,9 @@ class DBWriter:
                     "relevance_score": event.relevance_score,
                     "suppressed": 1 if event.suppressed else 0,
                     "suppression_reason": event.suppression_reason,
+                    "cve_matches": ",".join(event.cve_matches),
+                    "cve_max_severity": event.cve_max_severity,
+                    "cve_count": event.cve_count,
                 }
             )
         if not rows:
@@ -223,6 +229,9 @@ class DBWriter:
             ("relevance_score", "INTEGER"),
             ("suppressed", "INTEGER"),
             ("suppression_reason", "VARCHAR(64)"),
+            ("cve_matches", "TEXT"),
+            ("cve_max_severity", "VARCHAR(16)"),
+            ("cve_count", "INTEGER"),
         ]
         for name, col_type in columns:
             try:
