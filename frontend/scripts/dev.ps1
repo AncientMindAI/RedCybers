@@ -1,4 +1,4 @@
-﻿$portPath = Join-Path $PSScriptRoot "..\..\backend\.netwatch-port"
+﻿$portPath = Join-Path $PSScriptRoot "..\..\.netwatch-port"
 $env:VITE_API_PORT = "8787"
 
 if (Test-Path $portPath) {
