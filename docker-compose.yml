@@ -38,12 +38,8 @@ services:
       - elasticsearch
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - XPACK_SECURITY_ENABLED=false
     ports:
       - "5601:5601"
-    volumes:
-      - ./elk/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml
-      - ./elk/kibana/redcybers-logo.png:/usr/share/kibana/config/branding/redcybers-logo.png
 volumes:
   redcybers_pg:
   redcybers_es:

@@ -301,7 +301,7 @@ export default function App() {
               <div className="nav-label">Ops</div>
               <div className="tab-row">
                 <button className={`tab ${page === "realtime" ? "tab-active" : ""}`} onClick={() => setPage("realtime")}>Real-time</button>
-                <button className={`tab ${page === "elk" ? "tab-active" : ""}`} onClick={() => setPage("elk")}>Analytics</button>
+                <button className={`tab ${page === "elk" ? "tab-active" : ""}`} onClick={() => setPage("elk")}>ELK</button>
                 <button className={`tab ${page === "insights" ? "tab-active" : ""}`} onClick={() => setPage("insights")}>Insights</button>
                 <button className={`tab ${page === "audit" ? "tab-active" : ""}`} onClick={() => setPage("audit")}>Audit</button>
                 <button className={`tab ${page === "vulns" ? "tab-active" : ""}`} onClick={() => { setPage("vulns"); loadCveStats(); }}>Vulns</button>
@@ -344,7 +344,7 @@ export default function App() {
         <main className="mx-auto max-w-6xl px-6 py-8">
           <section className="panel space-y-4">
             <div className="row">
-              <div className="panel-title">RedCybers Analytics</div>
+              <div className="panel-title">Kibana</div>
               <a className="btn btn-outline grafana-link" href={KIBANA_URL} target="_blank" rel="noreferrer">
                 Open in new tab
               </a>
