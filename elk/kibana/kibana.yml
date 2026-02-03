@@ -1,0 +1,7 @@
+server.name: "RedCybers Analytics"
+server.publicBaseUrl: "http://localhost:5601"
+server.host: "0.0.0.0"
+# Branding (may require recent Kibana)
+xpack.branding:
+  logo: "/usr/share/kibana/config/branding/redcybers-logo.png"
+  favicon: "/usr/share/kibana/config/branding/redcybers-logo.png"
