@@ -137,11 +137,19 @@ def _iter_cve_files(base_path: str) -> Iterable[str]:
                 yield os.path.join(root, name)
 
 
-def import_cves_from_path(base_path: str, limit: int = 2000) -> List[CVERecord]:
+def import_cves_from_path(base_path: str, limit: int = 2000, min_year: int = 0) -> List[CVERecord]:
     records: List[CVERecord] = []
     if not os.path.isdir(base_path):
         return records
     for path in _iter_cve_files(base_path):
+        if min_year:
+            name = os.path.basename(path)
+            try:
+                year = int(name.split("-")[1])
+            except Exception:
+                year = 0
+            if year and year < min_year:
+                continue
         try:
             with open(path, "r", encoding="utf-8") as handle:
                 data = json.load(handle)

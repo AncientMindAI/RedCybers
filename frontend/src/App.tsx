@@ -87,6 +87,7 @@ type ConfigPayload = {
   suppress_ports?: string[];
   cve_source_path?: string;
   cve_import_limit?: number;
+  cve_min_year?: number;
 };
 
 const API_PORT = (import.meta as any).env?.VITE_API_PORT ?? "8787";
@@ -531,6 +532,10 @@ export default function App() {
               <div className="field">
                 <label>CVE Source Path (local cvelistV5)</label>
                 <input className="input" value={String(config.cve_source_path || "")} onChange={(e) => updateConfig("cve_source_path", e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Min CVE Year</label>
+                <input className="input" type="number" min={1999} max={2100} value={config.cve_min_year ?? 2020} onChange={(e) => updateConfig("cve_min_year", Number(e.target.value))} />
               </div>
               <div className="field">
                 <label>CVE Import Limit</label>

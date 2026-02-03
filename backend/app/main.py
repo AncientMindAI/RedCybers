@@ -61,6 +61,7 @@ class AppState:
             "suppress_ports": [],
             "cve_source_path": "",
             "cve_import_limit": 2000,
+            "cve_min_year": 2020,
         }
         self.status: Dict[str, object] = {
             "collector": "none",
@@ -701,7 +702,8 @@ async def import_cves(limit: int = 2000, path: Optional[str] = None) -> JSONResp
     if not source:
         return JSONResponse({"error": "missing CVE source path"}, status_code=400)
     max_limit = int(state.config.get("cve_import_limit") or limit or 2000)
-    records = import_cves_from_path(source, max_limit)
+    min_year = int(state.config.get("cve_min_year") or os.getenv("CVE_MIN_YEAR", "0"))
+    records = import_cves_from_path(source, max_limit, min_year=min_year)
     if not records:
         return JSONResponse({"imported": 0})
     count = state.cve_store.upsert(records)
