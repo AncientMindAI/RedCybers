@@ -1,0 +1,18 @@
+﻿apiVersion: 1
+
+datasources:
+  - name: RedCybers-Postgres
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: redcybers
+    user: redcybers
+    secureJsonData:
+      password: redcybers
+    jsonData:
+      sslmode: "disable"
+      postgresVersion: 1600
+      timescaledb: false
+      maxOpenConns: 50
+      maxIdleConns: 10
+      connMaxLifetime: 14400

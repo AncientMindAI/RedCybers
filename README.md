@@ -6,6 +6,7 @@ Windows-only real-time network telemetry with a browser UI.
 - `backend/` FastAPI service + collectors
 - `frontend/` React UI
 - `docker-compose.yml` Grafana + PostgreSQL
+- `grafana/` provisioning + dashboard
 
 ## Quick Start (dev)
 Backend:
@@ -30,6 +31,8 @@ docker compose up -d
 ```
 - Grafana: `http://localhost:3000` (admin / admin)
 - Postgres: `localhost:5432`
+
+Grafana auto-imports `RedCybers Overview` on startup.
 
 Set backend DB connection:
 ```
