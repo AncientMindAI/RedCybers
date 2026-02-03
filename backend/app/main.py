@@ -11,6 +11,7 @@ import os
 import socket
 import threading
 import time
+import ipaddress
 from typing import Deque, Dict, List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -56,9 +57,10 @@ class AppState:
             "otx_export_url": "",
             "abuseipdb_confidence_min": "75",
             "abuseipdb_limit": "100000",
-            "mitre_min_score": 25,
+            "mitre_min_score": 0,
             "suppress_private": False,
             "suppress_loopback": True,
+            "suppress_internal_internal": True,
             "suppress_processes": [],
             "suppress_ports": [],
             "cve_source_path": "",
@@ -221,6 +223,14 @@ def _parse_int_list(value: object) -> List[int]:
     return ints
 
 
+def _is_internal_ip(value: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return bool(ip.is_private or ip.is_loopback or ip.is_link_local)
+
+
 def _apply_mitre_and_triage(event: Event, config: Dict[str, object]) -> None:
     matches = map_event(event)
     top = best_match(matches)
@@ -249,6 +259,7 @@ def _apply_mitre_and_triage(event: Event, config: Dict[str, object]) -> None:
 
     suppress_private = bool(config.get("suppress_private", True))
     suppress_loopback = bool(config.get("suppress_loopback", True))
+    suppress_internal_internal = bool(config.get("suppress_internal_internal", True))
     suppress_processes = {p.lower() for p in _parse_list(config.get("suppress_processes", []))}
     suppress_ports = set(_parse_int_list(config.get("suppress_ports", [])))
     min_score = int(config.get("mitre_min_score", 25))
@@ -256,6 +267,10 @@ def _apply_mitre_and_triage(event: Event, config: Dict[str, object]) -> None:
     if suppress_loopback and event.remote_ip.startswith("127."):
         event.suppressed = True
         event.suppression_reason = "loopback"
+        return
+    if suppress_internal_internal and _is_internal_ip(event.local_ip) and _is_internal_ip(event.remote_ip):
+        event.suppressed = True
+        event.suppression_reason = "internal"
         return
     if suppress_private and not event.is_public:
         event.suppressed = True
@@ -269,7 +284,7 @@ def _apply_mitre_and_triage(event: Event, config: Dict[str, object]) -> None:
         event.suppressed = True
         event.suppression_reason = "port"
         return
-    if event.relevance_score < min_score:
+    if min_score > 0 and event.relevance_score < min_score:
         event.suppressed = True
         event.suppression_reason = "low-score"
 

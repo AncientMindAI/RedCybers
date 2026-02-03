@@ -88,6 +88,7 @@ type ConfigPayload = {
   mitre_min_score?: number;
   suppress_private?: boolean;
   suppress_loopback?: boolean;
+  suppress_internal_internal?: boolean;
   suppress_processes?: string[];
   suppress_ports?: string[];
   cve_source_path?: string;
@@ -116,6 +117,7 @@ export default function App() {
   const [showSuppressed, setShowSuppressed] = useState(false);
   const [showTimeWait, setShowTimeWait] = useState(false);
   const [onlyEstablished, setOnlyEstablished] = useState(true);
+  const [showInternalInternal, setShowInternalInternal] = useState(false);
   const [filter, setFilter] = useState("");
   const [health, setHealth] = useState<Health | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -206,8 +208,28 @@ export default function App() {
     return () => clearInterval(id);
   }, [page, wsStatus]);
 
+  const isInternalIp = (value: string) => {
+    const v = (value || "").trim();
+    if (!v) return false;
+    if (v === "::1" || v.toLowerCase().startsWith("fe80:") || v.toLowerCase().startsWith("fc") || v.toLowerCase().startsWith("fd")) {
+      return true;
+    }
+    if (v.startsWith("127.") || v.startsWith("169.254.")) return true;
+    if (v.startsWith("10.")) return true;
+    if (v.startsWith("192.168.")) return true;
+    if (v.startsWith("172.")) {
+      const parts = v.split(".");
+      const second = Number(parts[1]);
+      if (second >= 16 && second <= 31) return true;
+    }
+    return false;
+  };
+
   const filtered = useMemo(() => {
     let base = showSuppressed ? events : events.filter(e => !e.suppressed);
+    if (!showInternalInternal) {
+      base = base.filter(e => !(isInternalIp(e.local_ip) && isInternalIp(e.remote_ip)));
+    }
     const state = (e: EventItem) => String(e.state || "").toUpperCase();
     if (onlyEstablished) {
       base = base.filter(e => state(e) === "ESTABLISHED");
@@ -224,7 +246,7 @@ export default function App() {
       (e.remote_org ?? "").toLowerCase().includes(f) ||
       (e.mitre_technique_id ?? "").toLowerCase().includes(f)
     );
-  }, [events, filter, showSuppressed, showTimeWait, onlyEstablished]);
+  }, [events, filter, showSuppressed, showTimeWait, onlyEstablished, showInternalInternal]);
 
   const visible = useMemo(() => {
     if (filtered.length > 0) {
@@ -670,6 +692,13 @@ export default function App() {
                 </select>
               </div>
               <div className="field">
+                <label>Suppress Internal ↔ Internal</label>
+                <select className="input" value={String(config.suppress_internal_internal ?? true)} onChange={(e) => updateConfig("suppress_internal_internal", e.target.value === "true")}>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div className="field">
                 <label>Suppress Processes (comma separated)</label>
                 <input className="input" value={listValue(config.suppress_processes)} onChange={(e) => updateConfig("suppress_processes", e.target.value)} />
               </div>
@@ -944,6 +973,14 @@ export default function App() {
                   onChange={(e) => setShowTimeWait(e.target.checked)}
                 />
                 <span>Show TIME_WAIT</span>
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-xs text-white/70">
+                <input
+                  type="checkbox"
+                  checked={showInternalInternal}
+                  onChange={(e) => setShowInternalInternal(e.target.checked)}
+                />
+                <span>Show Internal ↔ Internal</span>
               </div>
               <div className="mt-4 space-y-2 text-sm text-white/70">
                 <div>Status: {health?.collector ?? "-"}</div>
