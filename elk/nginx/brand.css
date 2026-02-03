@@ -1,0 +1,39 @@
+:root {
+  --redcybers-accent: #ff3b3b;
+}
+
+body::before {
+  content: "RedCybers Analytics";
+  position: fixed;
+  top: 8px;
+  right: 18px;
+  z-index: 9999;
+  color: rgba(255,255,255,0.8);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.kbnLogo, .kbnGlobalHeader__logo, .loginWelcome__logo {
+  background-image: url("/redcybers-logo.png") !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+}
+
+.kbnLogo svg, .kbnGlobalHeader__logo svg, .loginWelcome__logo svg {
+  opacity: 0 !important;
+}
+
+.loginWelcome__title::after {
+  content: "RedCybers Analytics";
+  display: block;
+  color: #fff;
+  letter-spacing: 0.06em;
+}
+
+.loginWelcome__subtitle::after {
+  content: "Real-time cyber audit and threat telemetry";
+  display: block;
+  color: rgba(255,255,255,0.7);
+  letter-spacing: 0.04em;
+}
