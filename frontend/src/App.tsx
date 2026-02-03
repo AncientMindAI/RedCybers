@@ -93,6 +93,7 @@ const API_PORT = (import.meta as any).env?.VITE_API_PORT ?? "8787";
 const API_URL = `http://127.0.0.1:${API_PORT}`;
 const WS_URL = `ws://127.0.0.1:${API_PORT}/stream`;
 const GRAFANA_URL = (import.meta as any).env?.VITE_GRAFANA_URL ?? "http://localhost:3000";
+const APP_VERSION = (globalThis as any).__APP_VERSION__ ?? "dev";
 
 export default function App() {
   const [page, setPage] = useState<"realtime" | "insights" | "audit" | "vulns" | "grafana" | "settings">("realtime");
@@ -113,6 +114,7 @@ export default function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "failed">("connecting");
   const epsActive = (health?.events_per_sec ?? 0) > 0.1;
+  const [showAbout, setShowAbout] = useState(false);
 
   useEffect(() => {
     const load = () => {
@@ -293,9 +295,20 @@ export default function App() {
                 ws: {wsStatus}
               </div>
             </div>
+            <button className="link-pill" onClick={() => setShowAbout((prev) => !prev)}>
+              About
+            </button>
           </div>
         </div>
       </header>
+
+      {showAbout && (
+        <div className="about-banner">
+          <div className="about-title">RedCybers</div>
+          <div className="about-meta">Version {APP_VERSION}</div>
+          <div className="about-meta">Build: {new Date().toISOString().slice(0, 10)}</div>
+        </div>
+      )}
 
       {page === "vulns" ? (
         <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[320px_1fr]">
