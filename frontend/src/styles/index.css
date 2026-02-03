@@ -13,6 +13,14 @@ body {
   background: #0b0f14;
 }
 
+.logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 0 16px rgba(255,255,255,0.08);
+}
+
 .bg-grid {
   position: fixed;
   inset: 0;

@@ -199,7 +199,10 @@ export default function App() {
       <header className="sticky top-0 z-10 border-b border-white/10 bg-black/30 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div>
-            <div className="text-sm uppercase tracking-[0.3em] text-white/60">RedCybers</div>
+            <div className="flex items-center gap-3">
+              <img className="logo" src="/redcybers-logo.png" alt="RedCybers" />
+              <div className="text-sm uppercase tracking-[0.3em] text-white/60">RedCybers</div>
+            </div>
             <h1 className="text-2xl font-semibold">Live Threat Telemetry</h1>
             <div className="text-xs text-white/50">Connected to backend: {health?.host ?? "127.0.0.1"}:{health?.port ?? API_PORT}</div>
           </div>

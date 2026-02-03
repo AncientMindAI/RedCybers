@@ -21,7 +21,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from .collector.etw_collector import ETWCollector
 from .collector.polling_collector import PollingCollector
@@ -254,11 +254,19 @@ def _build_pdf_report(events: List[Event], summary: Dict[str, object], health_pa
     )
 
     now = datetime.now(timezone.utc)
-    header = [
-        Paragraph("<b>RedCybers</b> Audit & Threat Telemetry Report", title),
-        Paragraph(f"Generated: {now.strftime('%Y-%m-%d %H:%M:%S UTC')}", body),
-        Paragraph("Scope: Real-time telemetry, threat enrichment, and audit artifacts.", body),
-    ]
+    logo_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "public", "redcybers-logo.png")
+    )
+    header = []
+    if os.path.exists(logo_path):
+        header.append(Image(logo_path, width=0.55 * inch, height=0.55 * inch))
+    header.extend(
+        [
+            Paragraph("<b>RedCybers</b> Audit & Threat Telemetry Report", title),
+            Paragraph(f"Generated: {now.strftime('%Y-%m-%d %H:%M:%S UTC')}", body),
+            Paragraph("Scope: Real-time telemetry, threat enrichment, and audit artifacts.", body),
+        ]
+    )
 
     ops = [
         ["Collector", health_payload.get("collector", "-")],
