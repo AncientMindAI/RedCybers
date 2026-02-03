@@ -77,7 +77,7 @@ const WS_URL = `ws://127.0.0.1:${API_PORT}/stream`;
 const GRAFANA_URL = (import.meta as any).env?.VITE_GRAFANA_URL ?? "http://localhost:3000";
 
 export default function App() {
-  const [page, setPage] = useState<"realtime" | "insights" | "grafana" | "settings">("realtime");
+  const [page, setPage] = useState<"realtime" | "insights" | "audit" | "grafana" | "settings">("realtime");
   const [events, setEvents] = useState<EventItem[]>([]);
   const [paused, setPaused] = useState(false);
   const [filter, setFilter] = useState("");
@@ -206,6 +206,7 @@ export default function App() {
                 <button className={`tab ${page === "realtime" ? "tab-active" : ""}`} onClick={() => setPage("realtime")}>Real-time</button>
                 <button className={`tab ${page === "grafana" ? "tab-active" : ""}`} onClick={() => setPage("grafana")}>Dashboard</button>
                 <button className={`tab ${page === "insights" ? "tab-active" : ""}`} onClick={() => setPage("insights")}>Insights</button>
+                <button className={`tab ${page === "audit" ? "tab-active" : ""}`} onClick={() => setPage("audit")}>Audit</button>
               </div>
             </div>
             <div className="info-box">
@@ -229,7 +230,58 @@ export default function App() {
         </div>
       </header>
 
-      {page === "grafana" ? (
+      {page === "audit" ? (
+        <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[320px_1fr]">
+          <aside className="panel space-y-6">
+            <div>
+              <div className="panel-title">Audit Controls</div>
+              <div className="space-y-3 text-sm text-white/70">
+                <div>Export evidence snapshots and investigation artifacts.</div>
+                <button className="btn btn-outline" onClick={exportXlsx}>Export XLSX</button>
+              </div>
+            </div>
+
+            <div>
+              <div className="panel-title">Casework</div>
+              <div className="space-y-2 text-sm">
+                <div className="muted">Investigation queues and audit trails.</div>
+                <div className="row">
+                  <button className="tab tab-soon" disabled>Investigations</button>
+                  <button className="tab tab-soon" disabled>Reports</button>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <section className="panel space-y-6">
+            <div>
+              <div className="panel-title">Recent Alerts</div>
+              <div className="space-y-2 text-sm">
+                {(summary?.alerts ?? []).map((alert, idx) => (
+                  <div key={idx} className="alert-row">
+                    <div>
+                      <div className="alert-title">{alert.process_name} → {alert.remote_ip}</div>
+                      <div className="muted">{alert.remote_country || "-"} • {alert.threat_sources.join(",")}</div>
+                    </div>
+                    <div className="alert-score">{alert.threat_score}</div>
+                  </div>
+                ))}
+                {(!summary?.alerts || summary.alerts.length === 0) && (
+                  <div className="muted">No threat alerts yet</div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="panel-title">Audit Notes</div>
+              <div className="space-y-2 text-sm text-white/70">
+                <div>Capture analyst notes and remediation actions (planned).</div>
+                <div className="muted">Next release: tripwire alerts, remediation reports, content filtering evidence.</div>
+              </div>
+            </div>
+          </section>
+        </main>
+      ) : page === "grafana" ? (
         <main className="mx-auto max-w-6xl px-6 py-8">
           <section className="panel space-y-4">
             <div className="row">
