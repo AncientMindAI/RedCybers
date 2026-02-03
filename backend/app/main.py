@@ -31,6 +31,7 @@ from .mitre import best_match, map_event
 from .models import Event, IDSAlert
 from .cve_store import CVEStore
 from .ids_snort import SnortJsonTailer
+from .elk import ElkSender
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
 
@@ -69,6 +70,8 @@ class AppState:
             "ids_enabled": False,
             "ids_engine": "snort",
             "ids_log_path": "",
+            "elk_enabled": True,
+            "elk_logstash_url": "http://localhost:8080",
         }
         self.status: Dict[str, object] = {
             "collector": "none",
@@ -91,6 +94,7 @@ class AppState:
         self.cve_store: Optional[CVEStore] = None
         self.ids_buffer: Deque[Dict[str, object]] = deque(maxlen=5000)
         self.ids_tailer: Optional[SnortJsonTailer] = None
+        self.elk_sender: Optional[ElkSender] = None
 
     def enrich_event(self, event: Event) -> None:
         if self.enrichment is not None:
@@ -102,6 +106,8 @@ class AppState:
         self.buffer.append(event)
         if self.db_writer is not None:
             self.db_writer.enqueue(event)
+        if self.elk_sender is not None:
+            self.elk_sender.enqueue(event.model_dump(), index="redcybers-events")
         self.status["events_total"] = int(self.status["events_total"]) + 1
         self._update_rate()
         if self.loop is None:
@@ -110,6 +116,8 @@ class AppState:
 
     def enqueue_ids(self, alert: Dict[str, object]) -> None:
         self.ids_buffer.append(alert)
+        if self.elk_sender is not None:
+            self.elk_sender.enqueue(alert, index="redcybers-ids")
 
     async def _broadcast(self, event: Event) -> None:
         dead: List[WebSocket] = []
@@ -645,6 +653,12 @@ async def lifespan(_: FastAPI):
         state.cve_store = CVEStore(db_url)
         state.cve_store.start()
 
+    elk_enabled = bool(state.config.get("elk_enabled", True))
+    elk_url = str(state.config.get("elk_logstash_url") or os.getenv("ELK_LOGSTASH_URL", "http://localhost:8080")).strip()
+    if elk_enabled and elk_url:
+        state.elk_sender = ElkSender(elk_url)
+        state.elk_sender.start()
+
     ids_enabled = bool(state.config.get("ids_enabled", False))
     ids_engine = str(state.config.get("ids_engine") or "snort").lower()
     ids_path = str(state.config.get("ids_log_path") or os.getenv("IDS_LOG_PATH", "")).strip()
@@ -677,6 +691,8 @@ async def lifespan(_: FastAPI):
             state.cve_store.stop()
         if state.ids_tailer is not None:
             state.ids_tailer.stop()
+        if state.elk_sender is not None:
+            state.elk_sender.stop()
         if state.enrichment is not None:
             state.enrichment.stop()
         if hasattr(state.collector, "stop"):

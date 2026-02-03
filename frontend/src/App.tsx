@@ -104,11 +104,11 @@ type ConfigPayload = {
 const API_PORT = (import.meta as any).env?.VITE_API_PORT ?? "8787";
 const API_URL = `http://127.0.0.1:${API_PORT}`;
 const WS_URL = `ws://127.0.0.1:${API_PORT}/stream`;
-const GRAFANA_URL = (import.meta as any).env?.VITE_GRAFANA_URL ?? "http://localhost:3000";
+const KIBANA_URL = (import.meta as any).env?.VITE_KIBANA_URL ?? "http://localhost:5601";
 const APP_VERSION = (globalThis as any).__APP_VERSION__ ?? "dev";
 
 export default function App() {
-  const [page, setPage] = useState<"realtime" | "insights" | "audit" | "vulns" | "ids" | "grafana" | "settings">("realtime");
+  const [page, setPage] = useState<"realtime" | "insights" | "audit" | "vulns" | "ids" | "elk" | "settings">("realtime");
   const [events, setEvents] = useState<EventItem[]>([]);
   const [paused, setPaused] = useState(false);
   const [showSuppressed, setShowSuppressed] = useState(false);
@@ -299,7 +299,7 @@ export default function App() {
               <div className="nav-label">Ops</div>
               <div className="tab-row">
                 <button className={`tab ${page === "realtime" ? "tab-active" : ""}`} onClick={() => setPage("realtime")}>Real-time</button>
-                <button className={`tab ${page === "grafana" ? "tab-active" : ""}`} onClick={() => setPage("grafana")}>Dashboard</button>
+                <button className={`tab ${page === "elk" ? "tab-active" : ""}`} onClick={() => setPage("elk")}>ELK</button>
                 <button className={`tab ${page === "insights" ? "tab-active" : ""}`} onClick={() => setPage("insights")}>Insights</button>
                 <button className={`tab ${page === "audit" ? "tab-active" : ""}`} onClick={() => setPage("audit")}>Audit</button>
                 <button className={`tab ${page === "vulns" ? "tab-active" : ""}`} onClick={() => { setPage("vulns"); loadCveStats(); }}>Vulns</button>
@@ -338,7 +338,24 @@ export default function App() {
         </div>
       )}
 
-      {page === "ids" ? (
+      {page === "elk" ? (
+        <main className="mx-auto max-w-6xl px-6 py-8">
+          <section className="panel space-y-4">
+            <div className="row">
+              <div className="panel-title">Kibana</div>
+              <a className="btn btn-outline grafana-link" href={KIBANA_URL} target="_blank" rel="noreferrer">
+                Open in new tab
+              </a>
+            </div>
+            <div className="muted text-xs">
+              If the embed is blocked, open Kibana directly at {KIBANA_URL}.
+            </div>
+            <div className="grafana-frame-wrap">
+              <iframe className="grafana-frame" src={KIBANA_URL} title="Kibana" />
+            </div>
+          </section>
+        </main>
+      ) : page === "ids" ? (
         <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[320px_1fr]">
           <aside className="panel space-y-6">
             <div>

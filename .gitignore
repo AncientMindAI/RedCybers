@@ -17,6 +17,7 @@ frontend/.vite/
 .netwatch-port
 .redcybers-config.json
 .env
+grafana-removed/
 
 # OS
 .DS_Store

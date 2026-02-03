@@ -1,4 +1,3 @@
-﻿version: "3.9"
 services:
   postgres:
     image: postgres:16
@@ -11,23 +10,36 @@ services:
       - "5432:5432"
     volumes:
       - redcybers_pg:/var/lib/postgresql/data
-  grafana:
-    image: grafana/grafana:11.2.0
-    container_name: redcybers-grafana
-    ports:
-      - "3000:3000"
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+    container_name: redcybers-elasticsearch
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_SECURITY_ALLOW_EMBEDDING: "true"
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    ports:
+      - "9200:9200"
     volumes:
-      - redcybers_grafana:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - redcybers_es:/usr/share/elasticsearch/data
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.12.2
+    container_name: redcybers-logstash
     depends_on:
-      - postgres
+      - elasticsearch
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.2
+    container_name: redcybers-kibana
+    depends_on:
+      - elasticsearch
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
 volumes:
   redcybers_pg:
-  redcybers_grafana:
+  redcybers_es:
