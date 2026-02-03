@@ -215,7 +215,7 @@ async def lifespan(_: FastAPI):
     if persisted:
         state.config.update(persisted)
 
-    state.enrichment = EnrichmentService(state.collector_stop)
+    state.enrichment = EnrichmentService()
     state.enrichment.start(state.config)
 
     if ETWCollector.available():

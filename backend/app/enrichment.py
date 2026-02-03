@@ -274,16 +274,18 @@ class IpInfoResolver:
 
 
 class EnrichmentService:
-    def __init__(self, stop_event: threading.Event) -> None:
-        self._stop_event = stop_event
+    def __init__(self) -> None:
         self._config: Dict[str, object] = {}
-        self.threats = ThreatFeedManager(stop_event)
+        self._stop_event = threading.Event()
+        self.threats = ThreatFeedManager(self._stop_event)
         token = _get_override(self._config, "ipinfo_key", "IPINFO_API_KEY")
-        self.ipinfo = IpInfoResolver(stop_event, token=token)
+        self.ipinfo = IpInfoResolver(self._stop_event, token=token)
 
     def start(self, config: Optional[Dict[str, object]] = None) -> None:
         if config:
             self._config.update(config)
+        self._stop_event = threading.Event()
+        self.threats = ThreatFeedManager(self._stop_event)
         self.threats.configure(self._config)
         self.threats.start()
         token = _get_override(self._config, "ipinfo_key", "IPINFO_API_KEY")
@@ -291,13 +293,13 @@ class EnrichmentService:
         self.ipinfo.start()
 
     def stop(self) -> None:
+        self._stop_event.set()
         self.threats.stop()
         self.ipinfo.stop()
 
     def apply_config(self, config: Dict[str, object]) -> None:
         self._config.update(config)
         self.stop()
-        self._stop_event.clear()
         self.start(self._config)
 
     def enrich(self, event: Event) -> None:
