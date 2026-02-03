@@ -164,6 +164,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    setShowInternalInternal(!(config.suppress_internal_internal ?? true));
+  }, [config.suppress_internal_internal]);
+
+  useEffect(() => {
     if (paused || page !== "realtime") return;
 
     const ws = new WebSocket(WS_URL);
@@ -318,6 +322,25 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
+      });
+      if (!resp.ok) throw new Error("Save failed");
+      const data = await resp.json();
+      setConfig(data);
+      setSaveStatus("Saved");
+      setTimeout(() => setSaveStatus(""), 2000);
+    } catch {
+      setSaveStatus("Save failed");
+    }
+  };
+
+  const applyConfigPatch = async (patch: Partial<ConfigPayload>) => {
+    setSaveStatus("Saving...");
+    const next = { ...config, ...patch };
+    try {
+      const resp = await fetch(`${API_URL}/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
       });
       if (!resp.ok) throw new Error("Save failed");
       const data = await resp.json();
@@ -978,7 +1001,11 @@ export default function App() {
                 <input
                   type="checkbox"
                   checked={showInternalInternal}
-                  onChange={(e) => setShowInternalInternal(e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setShowInternalInternal(checked);
+                    applyConfigPatch({ suppress_internal_internal: !checked });
+                  }}
                 />
                 <span>Show Internal ↔ Internal</span>
               </div>
