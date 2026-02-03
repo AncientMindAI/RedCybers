@@ -911,7 +911,7 @@ export default function App() {
           </section>
         </main>
       ) : (
-        <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[300px_1fr]">
+        <main className="mx-auto grid max-w-none gap-6 px-4 py-8 lg:grid-cols-[240px_1fr]">
           <aside className="panel space-y-6">
             <div>
               <div className="panel-title">Real-time Controls</div>
@@ -957,10 +957,9 @@ export default function App() {
               </div>
             </div>
           </aside>
-
           <section className="panel">
             <div className="panel-title">Real-time Monitoring</div>
-            <div className="table-wrap">
+            <div className="table-wrap table-wrap-taller">
               <table className="table">
                 <thead>
                   <tr>

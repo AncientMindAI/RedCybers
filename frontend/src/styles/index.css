@@ -311,8 +311,20 @@ body {
 }
 
 .table-wrap {
-  overflow: auto;
-  max-height: 60vh;
+  overflow-y: scroll;
+  overflow-x: auto;
+  max-height: 78vh;
+  min-height: 78vh;
+}
+
+.table-wrap-tall {
+  max-height: 84vh;
+  min-height: 84vh;
+}
+
+.table-wrap-taller {
+  max-height: 86vh;
+  min-height: 86vh;
 }
 
 .table {
@@ -320,6 +332,7 @@ body {
   border-collapse: collapse;
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
+  table-layout: fixed;
 }
 
 .table th,
@@ -327,6 +340,9 @@ body {
   padding: 10px 8px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
   vertical-align: top;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .table th {
@@ -352,6 +368,16 @@ body {
   background: rgba(255, 89, 89, 0.08);
 }
 
+.row-unknown {
+  animation: pulse-unknown 1.6s ease-in-out infinite;
+  box-shadow: inset 0 0 0 9999px rgba(255, 0, 0, 0.06);
+}
+
+@keyframes pulse-unknown {
+  0% { box-shadow: inset 0 0 0 9999px rgba(255, 0, 0, 0.04); }
+  50% { box-shadow: inset 0 0 0 9999px rgba(255, 0, 0, 0.16); }
+  100% { box-shadow: inset 0 0 0 9999px rgba(255, 0, 0, 0.04); }
+}
 .row-detail td {
   background: rgba(0,0,0,0.25);
 }
