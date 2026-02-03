@@ -99,24 +99,39 @@ class CVEStore:
             rows = conn.execute(sql, params).mappings().all()
         return [dict(r) for r in rows]
 
-    def match_for_process(self, name: str, min_sev: str = "HIGH") -> List[Dict[str, object]]:
+    def match_for_process(self, name: str, min_sev: str = "HIGH", strict: bool = True) -> List[Dict[str, object]]:
         q = name.strip()
         if not q:
             return []
         order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
         min_rank = order.get(min_sev.upper(), 0)
         allowed = [sev for sev, rank in order.items() if rank >= min_rank]
-        params: Dict[str, object] = {"q": f"%{q}%", "limit": 20, "severities": tuple(allowed)}
-        sql = text(
-            """
-            SELECT cve_id, severity, cvss_score
-            FROM cves
-            WHERE (vendors ILIKE :q OR products ILIKE :q)
-              AND severity = ANY(:severities)
-            ORDER BY cvss_score DESC NULLS LAST
-            LIMIT :limit
-            """
-        )
+        params: Dict[str, object] = {"q": q, "like_q": f"%{q}%", "limit": 20, "severities": tuple(allowed)}
+        if strict:
+            sql = text(
+                """
+                SELECT cve_id, severity, cvss_score
+                FROM cves
+                WHERE (
+                        products ~* ('(^|,\\s*)' || :q || '(,|$)')
+                        OR vendors ~* ('(^|,\\s*)' || :q || '(,|$)')
+                      )
+                  AND severity = ANY(:severities)
+                ORDER BY cvss_score DESC NULLS LAST
+                LIMIT :limit
+                """
+            )
+        else:
+            sql = text(
+                """
+                SELECT cve_id, severity, cvss_score
+                FROM cves
+                WHERE (vendors ILIKE :like_q OR products ILIKE :like_q)
+                  AND severity = ANY(:severities)
+                ORDER BY cvss_score DESC NULLS LAST
+                LIMIT :limit
+                """
+            )
         with self._engine.connect() as conn:
             rows = conn.execute(sql, params).mappings().all()
         return [dict(r) for r in rows]

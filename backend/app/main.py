@@ -64,6 +64,7 @@ class AppState:
             "cve_min_year": 2020,
             "cve_match_enabled": True,
             "cve_min_severity": "HIGH",
+            "cve_match_strict": True,
         }
         self.status: Dict[str, object] = {
             "collector": "none",
@@ -269,8 +270,10 @@ def _apply_cve_match(event: Event, config: Dict[str, object], store: Optional[CV
     name = (event.process_name or "").strip()
     if not name:
         return
+    base = os.path.splitext(name)[0]
     min_sev = str(config.get("cve_min_severity", "HIGH") or "HIGH").upper()
-    matches = store.match_for_process(name, min_sev=min_sev)
+    strict = bool(config.get("cve_match_strict", True))
+    matches = store.match_for_process(base, min_sev=min_sev, strict=strict)
     if not matches:
         return
     event.cve_matches = [m["cve_id"] for m in matches][:5]

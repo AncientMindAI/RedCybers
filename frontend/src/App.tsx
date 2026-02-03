@@ -95,6 +95,7 @@ type ConfigPayload = {
   cve_min_year?: number;
   cve_match_enabled?: boolean;
   cve_min_severity?: string;
+  cve_match_strict?: boolean;
 };
 
 const API_PORT = (import.meta as any).env?.VITE_API_PORT ?? "8787";
@@ -556,6 +557,13 @@ export default function App() {
                 </select>
               </div>
               <div className="field">
+                <label>Strict CVE Match (exact vendor/product)</label>
+                <select className="input" value={String(config.cve_match_strict ?? true)} onChange={(e) => updateConfig("cve_match_strict", e.target.value === "true")}>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div className="field">
                 <label>Minimum CVE Severity</label>
                 <select className="input" value={String(config.cve_min_severity ?? "HIGH")} onChange={(e) => updateConfig("cve_min_severity", e.target.value)}>
                   <option value="CRITICAL">CRITICAL</option>
@@ -810,6 +818,7 @@ export default function App() {
                                 <div><span className="muted">Relevance:</span> {e.relevance_score ?? 0}</div>
                                 <div><span className="muted">Suppressed:</span> {e.suppressed ? e.suppression_reason || "yes" : "no"}</div>
                                 <div><span className="muted">CVE:</span> {e.cve_max_severity || "-"} {e.cve_matches && e.cve_matches.length ? e.cve_matches.join(",") : ""}</div>
+                                <div><span className="muted">Correlation:</span> {(e.cve_max_severity ? `CVE ${e.cve_max_severity}` : "CVE -")} • {e.mitre_tactic || "ATT&CK -"}</div>
                               </div>
                             </td>
                           </tr>
