@@ -139,9 +139,15 @@ def _summary(events: List[Event]) -> Dict[str, object]:
         uniq_ips = {e.remote_ip for e in public_events if e.process_name == app}
         top_apps.append({"app": app, "count": count, "unique_public_ips": len(uniq_ips)})
 
+    by_country = Counter([e.remote_country for e in public_events if e.remote_country])
+    top_countries = [
+        {"country": country, "count": count} for country, count in by_country.most_common(5)
+    ]
+
     threat_hits = sum(1 for e in public_events if e.threat_sources)
     return {
         "top_public_apps": top_apps,
+        "top_countries": top_countries,
         "public_events": len(public_events),
         "threat_hits": threat_hits,
     }

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 type EventItem = {
   ts: string;
@@ -15,7 +15,13 @@ type EventItem = {
   state: string;
   is_public?: boolean;
   remote_country?: string;
+  remote_region?: string;
+  remote_city?: string;
   remote_org?: string;
+  remote_asn?: string;
+  remote_hostname?: string;
+  remote_loc?: string;
+  remote_timezone?: string;
   threat_sources?: string[];
 };
 
@@ -31,6 +37,7 @@ type Health = {
 
 type Summary = {
   top_public_apps: { app: string; count: number; unique_public_ips: number }[];
+  top_countries: { country: string; count: number }[];
   public_events: number;
   threat_hits: number;
 };
@@ -45,6 +52,7 @@ export default function App() {
   const [filter, setFilter] = useState("");
   const [health, setHealth] = useState<Health | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -91,13 +99,20 @@ export default function App() {
       e.process_name.toLowerCase().includes(f) ||
       e.remote_ip.toLowerCase().includes(f) ||
       String(e.remote_port).includes(f) ||
-      (e.remote_country ?? "").toLowerCase().includes(f)
+      (e.remote_country ?? "").toLowerCase().includes(f) ||
+      (e.remote_org ?? "").toLowerCase().includes(f)
     );
   }, [events, filter]);
 
   const exportXlsx = () => {
     window.open(`${API_URL}/export/xlsx`, "_blank");
   };
+
+  const toggleRow = (key: string) => {
+    setExpandedKey(prev => (prev === key ? null : key));
+  };
+
+  const rowKey = (e: EventItem, index: number) => `${e.ts}-${e.pid}-${e.remote_ip}-${index}`;
 
   return (
     <div className="min-h-screen bg-bg text-white">
@@ -118,13 +133,13 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[280px_1fr]">
+      <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[300px_1fr]">
         <aside className="panel space-y-6">
           <div>
             <div className="panel-title">Filters</div>
             <input
               className="input"
-              placeholder="process / ip / port / country"
+              placeholder="process / ip / port / country / org"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
             />
@@ -159,6 +174,21 @@ export default function App() {
               )}
             </div>
           </div>
+
+          <div>
+            <div className="panel-title">Top Countries</div>
+            <div className="space-y-2 text-sm">
+              {(summary?.top_countries ?? []).map((item, idx) => (
+                <div key={idx} className="row">
+                  <span>{item.country}</span>
+                  <span className="muted">{item.count}</span>
+                </div>
+              ))}
+              {(!summary?.top_countries || summary.top_countries.length === 0) && (
+                <div className="muted">No geo data yet</div>
+              )}
+            </div>
+          </div>
         </aside>
 
         <section className="panel">
@@ -174,24 +204,46 @@ export default function App() {
                   <th>Local</th>
                   <th>Remote</th>
                   <th>Country</th>
+                  <th>Org</th>
                   <th>Threats</th>
                   <th>State</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((e, i) => (
-                  <tr key={i}>
-                    <td>{new Date(e.ts).toLocaleTimeString()}</td>
-                    <td>{e.process_name}</td>
-                    <td>{e.pid}</td>
-                    <td>{e.protocol}</td>
-                    <td>{e.local_ip}:{e.local_port}</td>
-                    <td>{e.remote_ip}:{e.remote_port}</td>
-                    <td>{e.remote_country || "-"}</td>
-                    <td>{(e.threat_sources && e.threat_sources.length > 0) ? e.threat_sources.join(",") : "-"}</td>
-                    <td>{e.state}</td>
-                  </tr>
-                ))}
+                {filtered.map((e, i) => {
+                  const key = rowKey(e, i);
+                  const expanded = expandedKey === key;
+                  return (
+                    <Fragment key={key}>
+                      <tr className="row-click" onClick={() => toggleRow(key)}>
+                        <td>{new Date(e.ts).toLocaleTimeString()}</td>
+                        <td>{e.process_name}</td>
+                        <td>{e.pid}</td>
+                        <td>{e.protocol}</td>
+                        <td>{e.local_ip}:{e.local_port}</td>
+                        <td>{e.remote_ip}:{e.remote_port}</td>
+                        <td>{e.remote_country || "-"}</td>
+                        <td>{e.remote_org || "-"}</td>
+                        <td>{(e.threat_sources && e.threat_sources.length > 0) ? e.threat_sources.join(",") : "-"}</td>
+                        <td>{e.state}</td>
+                      </tr>
+                      {expanded && (
+                        <tr className="row-detail">
+                          <td colSpan={10}>
+                            <div className="detail-grid">
+                              <div><span className="muted">Region:</span> {e.remote_region || "-"}</div>
+                              <div><span className="muted">City:</span> {e.remote_city || "-"}</div>
+                              <div><span className="muted">ASN:</span> {e.remote_asn || "-"}</div>
+                              <div><span className="muted">Hostname:</span> {e.remote_hostname || "-"}</div>
+                              <div><span className="muted">Loc:</span> {e.remote_loc || "-"}</div>
+                              <div><span className="muted">Timezone:</span> {e.remote_timezone || "-"}</div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
