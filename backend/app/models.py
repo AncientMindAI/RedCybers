@@ -44,6 +44,10 @@ class Event(BaseModel):
     cve_max_severity: str = ""
     cve_count: int = 0
 
+    @staticmethod
+    def now_iso() -> str:
+        return datetime.utcnow().isoformat() + "Z"
+
 
 class IDSAlert(BaseModel):
     ts: str
@@ -59,7 +63,3 @@ class IDSAlert(BaseModel):
     dst_port: int
     proto: str
     raw: str = ""
-
-    @staticmethod
-    def now_iso() -> str:
-        return datetime.utcnow().isoformat() + "Z"
