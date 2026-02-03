@@ -44,6 +44,7 @@ services:
     volumes:
       - ./elk/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml
       - ./elk/kibana/redcybers-logo.png:/usr/share/kibana/config/branding/redcybers-logo.png
+      - ./elk/kibana/redcybers-favicon.png:/usr/share/kibana/config/branding/redcybers-favicon.png
 volumes:
   redcybers_pg:
   redcybers_es:
