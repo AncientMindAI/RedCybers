@@ -29,6 +29,7 @@ from .db import DBWriter, get_database_url
 from .enrichment import EnrichmentService
 from .mitre import best_match, map_event
 from .models import Event
+from .cve_store import CVEStore
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
 
@@ -58,6 +59,8 @@ class AppState:
             "suppress_loopback": True,
             "suppress_processes": [],
             "suppress_ports": [],
+            "cve_source_path": "",
+            "cve_import_limit": 2000,
         }
         self.status: Dict[str, object] = {
             "collector": "none",
@@ -77,6 +80,7 @@ class AppState:
         self.collector = None
         self.enrichment: Optional[EnrichmentService] = None
         self.db_writer: Optional[DBWriter] = None
+        self.cve_store: Optional[CVEStore] = None
 
     def enrich_event(self, event: Event) -> None:
         if self.enrichment is not None:
@@ -579,6 +583,8 @@ async def lifespan(_: FastAPI):
         retention_days = int(os.getenv("REDCYBERS_RETENTION_DAYS", "90"))
         state.db_writer = DBWriter(db_url, retention_days=retention_days)
         state.db_writer.start()
+        state.cve_store = CVEStore(db_url)
+        state.cve_store.start()
 
     if ETWCollector.available():
         state.collector = ETWCollector(state, state.collector_stop)
@@ -599,6 +605,8 @@ async def lifespan(_: FastAPI):
         state.collector_stop.set()
         if state.db_writer is not None:
             state.db_writer.stop()
+        if state.cve_store is not None:
+            state.cve_store.stop()
         if state.enrichment is not None:
             state.enrichment.stop()
         if hasattr(state.collector, "stop"):
@@ -683,6 +691,35 @@ async def query(
         end_ts=end_ts,
     )
     return JSONResponse(rows)
+
+
+@app.post("/cve/import")
+async def import_cves(limit: int = 2000, path: Optional[str] = None) -> JSONResponse:
+    if state.cve_store is None:
+        return JSONResponse({"error": "database disabled"}, status_code=400)
+    source = path or str(state.config.get("cve_source_path") or os.getenv("CVE_SOURCE_PATH", "")).strip()
+    if not source:
+        return JSONResponse({"error": "missing CVE source path"}, status_code=400)
+    max_limit = int(state.config.get("cve_import_limit") or limit or 2000)
+    records = import_cves_from_path(source, max_limit)
+    if not records:
+        return JSONResponse({"imported": 0})
+    count = state.cve_store.upsert(records)
+    return JSONResponse({"imported": count})
+
+
+@app.get("/cve/search")
+async def search_cves(query: str = "", severity_min: float = 0.0, limit: int = 100) -> JSONResponse:
+    if state.cve_store is None:
+        return JSONResponse({"error": "database disabled"}, status_code=400)
+    return JSONResponse(state.cve_store.search(query=query, severity_min=severity_min, limit=limit))
+
+
+@app.get("/cve/stats")
+async def cve_stats() -> JSONResponse:
+    if state.cve_store is None:
+        return JSONResponse({"error": "database disabled"}, status_code=400)
+    return JSONResponse(state.cve_store.stats())
 
 
 @app.get("/export/xlsx")
@@ -793,3 +830,4 @@ if __name__ == "__main__":
     _write_port_file(port)
 
     uvicorn.run("app.main:app", host=args.host, port=port, reload=False)
+from .cve import import_cves_from_path

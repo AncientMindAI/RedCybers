@@ -85,6 +85,8 @@ type ConfigPayload = {
   suppress_loopback?: boolean;
   suppress_processes?: string[];
   suppress_ports?: string[];
+  cve_source_path?: string;
+  cve_import_limit?: number;
 };
 
 const API_PORT = (import.meta as any).env?.VITE_API_PORT ?? "8787";
@@ -93,7 +95,7 @@ const WS_URL = `ws://127.0.0.1:${API_PORT}/stream`;
 const GRAFANA_URL = (import.meta as any).env?.VITE_GRAFANA_URL ?? "http://localhost:3000";
 
 export default function App() {
-  const [page, setPage] = useState<"realtime" | "insights" | "audit" | "grafana" | "settings">("realtime");
+  const [page, setPage] = useState<"realtime" | "insights" | "audit" | "vulns" | "grafana" | "settings">("realtime");
   const [events, setEvents] = useState<EventItem[]>([]);
   const [paused, setPaused] = useState(false);
   const [showSuppressed, setShowSuppressed] = useState(false);
@@ -102,6 +104,10 @@ export default function App() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [selectedTactic, setSelectedTactic] = useState<string>("");
+  const [cveQuery, setCveQuery] = useState("");
+  const [cveResults, setCveResults] = useState<Array<Record<string, any>>>([]);
+  const [cveStats, setCveStats] = useState<{ by_severity?: { severity: string; count: number }[] }>({});
+  const [cveImportStatus, setCveImportStatus] = useState<string>("");
   const [config, setConfig] = useState<ConfigPayload>({});
   const [saveStatus, setSaveStatus] = useState<string>("");
   const wsRef = useRef<WebSocket | null>(null);
@@ -185,6 +191,34 @@ export default function App() {
     window.open(`${API_URL}/export/pdf`, "_blank");
   };
 
+  const searchCves = async () => {
+    const qs = new URLSearchParams({ query: cveQuery, limit: "50" });
+    const resp = await fetch(`${API_URL}/cve/search?${qs.toString()}`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    setCveResults(Array.isArray(data) ? data : []);
+  };
+
+  const loadCveStats = async () => {
+    const resp = await fetch(`${API_URL}/cve/stats`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    setCveStats(data || {});
+  };
+
+  const importCves = async () => {
+    setCveImportStatus("Importing...");
+    const resp = await fetch(`${API_URL}/cve/import`, { method: "POST" });
+    if (!resp.ok) {
+      setCveImportStatus("Import failed");
+      return;
+    }
+    const data = await resp.json();
+    setCveImportStatus(`Imported ${data.imported ?? 0}`);
+    setTimeout(() => setCveImportStatus(""), 2000);
+    loadCveStats();
+  };
+
   const toggleRow = (key: string) => {
     setExpandedKey(prev => (prev === key ? null : key));
   };
@@ -239,6 +273,7 @@ export default function App() {
                 <button className={`tab ${page === "grafana" ? "tab-active" : ""}`} onClick={() => setPage("grafana")}>Dashboard</button>
                 <button className={`tab ${page === "insights" ? "tab-active" : ""}`} onClick={() => setPage("insights")}>Insights</button>
                 <button className={`tab ${page === "audit" ? "tab-active" : ""}`} onClick={() => setPage("audit")}>Audit</button>
+                <button className={`tab ${page === "vulns" ? "tab-active" : ""}`} onClick={() => { setPage("vulns"); loadCveStats(); }}>Vulns</button>
               </div>
             </div>
             <div className="info-box">
@@ -262,7 +297,75 @@ export default function App() {
         </div>
       </header>
 
-      {page === "audit" ? (
+      {page === "vulns" ? (
+        <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[320px_1fr]">
+          <aside className="panel space-y-6">
+            <div>
+              <div className="panel-title">CVE Import</div>
+              <div className="space-y-3 text-sm text-white/70">
+                <div className="muted">Point to a local CVE.org cvelistV5 folder in Settings, then import.</div>
+                <button className="btn btn-outline" onClick={importCves}>Import CVEs</button>
+                <div className="muted">{cveImportStatus}</div>
+              </div>
+            </div>
+            <div>
+              <div className="panel-title">Severity</div>
+              <div className="space-y-2 text-sm">
+                {(cveStats.by_severity ?? []).map((row, idx) => (
+                  <div key={idx} className="row">
+                    <span>{row.severity || "Unknown"}</span>
+                    <span className="muted">{row.count}</span>
+                  </div>
+                ))}
+                {(!cveStats.by_severity || cveStats.by_severity.length === 0) && (
+                  <div className="muted">No CVE data loaded</div>
+                )}
+              </div>
+            </div>
+          </aside>
+
+          <section className="panel space-y-6">
+            <div>
+              <div className="panel-title">CVE Search</div>
+              <div className="row">
+                <input className="input" placeholder="CVE-2024-xxxx, vendor, keyword" value={cveQuery} onChange={(e) => setCveQuery(e.target.value)} />
+                <button className="btn btn-outline btn-inline" onClick={searchCves}>Search</button>
+              </div>
+            </div>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>CVE</th>
+                    <th>Title</th>
+                    <th>Severity</th>
+                    <th>CVSS</th>
+                    <th>Vendors</th>
+                    <th>Products</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cveResults.map((row, idx) => (
+                    <tr key={idx}>
+                      <td>{row.cve_id}</td>
+                      <td>{row.title || "-"}</td>
+                      <td>{row.severity || "-"}</td>
+                      <td>{row.cvss_score ?? "-"}</td>
+                      <td>{row.vendors || "-"}</td>
+                      <td>{row.products || "-"}</td>
+                    </tr>
+                  ))}
+                  {cveResults.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="muted">No results</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </main>
+      ) : page === "audit" ? (
         <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[320px_1fr]">
           <aside className="panel space-y-6">
             <div>
@@ -407,6 +510,18 @@ export default function App() {
               <div className="field">
                 <label>Suppress Ports (comma separated)</label>
                 <input className="input" value={listValue(config.suppress_ports)} onChange={(e) => updateConfig("suppress_ports", e.target.value)} />
+              </div>
+            </div>
+
+            <div>
+              <div className="panel-title">Vulnerability Data</div>
+              <div className="field">
+                <label>CVE Source Path (local cvelistV5)</label>
+                <input className="input" value={String(config.cve_source_path || "")} onChange={(e) => updateConfig("cve_source_path", e.target.value)} />
+              </div>
+              <div className="field">
+                <label>CVE Import Limit</label>
+                <input className="input" type="number" min={100} max={100000} value={config.cve_import_limit ?? 2000} onChange={(e) => updateConfig("cve_import_limit", Number(e.target.value))} />
               </div>
             </div>
 
