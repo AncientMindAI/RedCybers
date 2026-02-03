@@ -99,6 +99,8 @@ type ConfigPayload = {
   ids_enabled?: boolean;
   ids_engine?: string;
   ids_log_path?: string;
+  elk_enabled?: boolean;
+  elk_logstash_url?: string;
 };
 
 const API_PORT = (import.meta as any).env?.VITE_API_PORT ?? "8787";
@@ -701,6 +703,21 @@ export default function App() {
               <div className="field">
                 <label>Snort JSON Log Path</label>
                 <input className="input" value={String(config.ids_log_path || "")} onChange={(e) => updateConfig("ids_log_path", e.target.value)} />
+              </div>
+            </div>
+
+            <div>
+              <div className="panel-title">ELK Shipping</div>
+              <div className="field">
+                <label>Enable ELK</label>
+                <select className="input" value={String(config.elk_enabled ?? true)} onChange={(e) => updateConfig("elk_enabled", e.target.value === "true")}>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Logstash HTTP URL</label>
+                <input className="input" value={String(config.elk_logstash_url || "http://localhost:8080")} onChange={(e) => updateConfig("elk_logstash_url", e.target.value)} />
               </div>
             </div>
 

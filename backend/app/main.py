@@ -803,6 +803,9 @@ async def import_cves(limit: int = 2000, path: Optional[str] = None) -> JSONResp
     if not records:
         return JSONResponse({"imported": 0})
     count = state.cve_store.upsert(records)
+    if state.elk_sender is not None:
+        for record in records:
+            state.elk_sender.enqueue(record.__dict__, index="redcybers-cves")
     return JSONResponse({"imported": count})
 
 
