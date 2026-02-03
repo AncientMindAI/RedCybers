@@ -177,6 +177,7 @@ export default function App() {
           <div>
             <div className="text-sm uppercase tracking-[0.3em] text-white/60">RedCybers</div>
             <h1 className="text-2xl font-semibold">Live Threat Telemetry</h1>
+            <div className="text-xs text-white/50">Connected to backend: {health?.host ?? "127.0.0.1"}:{health?.port ?? API_PORT}</div>
           </div>
           <div className="flex items-center gap-3">
             <button className={`tab ${page === "dashboard" ? "tab-active" : ""}`} onClick={() => setPage("dashboard")}>Dashboard</button>
