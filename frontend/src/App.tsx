@@ -306,7 +306,7 @@ export default function App() {
         <div className="about-banner">
           <div className="about-title">RedCybers</div>
           <div className="about-meta">Version {APP_VERSION}</div>
-          <div className="about-meta">Build: {new Date().toISOString().slice(0, 10)}</div>
+          <div className="about-meta">Build: {new Date().toISOString()}</div>
         </div>
       )}
 
