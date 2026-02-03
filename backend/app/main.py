@@ -18,6 +18,7 @@ from openpyxl import Workbook
 
 from .collector.etw_collector import ETWCollector
 from .collector.polling_collector import PollingCollector
+from .db import DBWriter, get_database_url
 from .enrichment import EnrichmentService
 from .models import Event
 
@@ -62,6 +63,7 @@ class AppState:
         self.collector_stop = threading.Event()
         self.collector = None
         self.enrichment: Optional[EnrichmentService] = None
+        self.db_writer: Optional[DBWriter] = None
 
     def enrich_event(self, event: Event) -> None:
         if self.enrichment is not None:
@@ -69,6 +71,8 @@ class AppState:
 
     def enqueue(self, event: Event) -> None:
         self.buffer.append(event)
+        if self.db_writer is not None:
+            self.db_writer.enqueue(event)
         self.status["events_total"] = int(self.status["events_total"]) + 1
         self._update_rate()
         if self.loop is None:
@@ -218,6 +222,12 @@ async def lifespan(_: FastAPI):
     state.enrichment = EnrichmentService()
     state.enrichment.start(state.config)
 
+    db_url = get_database_url()
+    if db_url:
+        retention_days = int(os.getenv("REDCYBERS_RETENTION_DAYS", "90"))
+        state.db_writer = DBWriter(db_url, retention_days=retention_days)
+        state.db_writer.start()
+
     if ETWCollector.available():
         state.collector = ETWCollector(state, state.collector_stop)
         state.status["collector"] = "etw"
@@ -235,6 +245,8 @@ async def lifespan(_: FastAPI):
         yield
     finally:
         state.collector_stop.set()
+        if state.db_writer is not None:
+            state.db_writer.stop()
         if state.enrichment is not None:
             state.enrichment.stop()
         if hasattr(state.collector, "stop"):
@@ -295,6 +307,30 @@ async def set_config(payload: Dict[str, object]) -> JSONResponse:
 async def history(limit: int = 500) -> JSONResponse:
     events = list(state.buffer)[-limit:]
     return JSONResponse([e.model_dump() for e in events])
+
+
+@app.get("/query")
+async def query(
+    limit: int = 500,
+    process_name: str = "",
+    remote_ip: str = "",
+    country: str = "",
+    threat_min: int = 0,
+    start_ts: Optional[str] = None,
+    end_ts: Optional[str] = None,
+) -> JSONResponse:
+    if state.db_writer is None:
+        return JSONResponse({"error": "database disabled"}, status_code=400)
+    rows = state.db_writer.query(
+        limit=limit,
+        process_name=process_name,
+        remote_ip=remote_ip,
+        country=country,
+        threat_min=threat_min,
+        start_ts=start_ts,
+        end_ts=end_ts,
+    )
+    return JSONResponse(rows)
 
 
 @app.get("/export/xlsx")

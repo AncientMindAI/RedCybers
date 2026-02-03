@@ -76,7 +76,7 @@ const API_URL = `http://127.0.0.1:${API_PORT}`;
 const WS_URL = `ws://127.0.0.1:${API_PORT}/stream`;
 
 export default function App() {
-  const [page, setPage] = useState<"dashboard" | "settings">("dashboard");
+  const [page, setPage] = useState<"realtime" | "insights" | "settings">("realtime");
   const [events, setEvents] = useState<EventItem[]>([]);
   const [paused, setPaused] = useState(false);
   const [filter, setFilter] = useState("");
@@ -99,7 +99,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (paused || page !== "dashboard") return;
+    if (paused || page !== "realtime") return;
 
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
@@ -180,7 +180,8 @@ export default function App() {
             <div className="text-xs text-white/50">Connected to backend: {health?.host ?? "127.0.0.1"}:{health?.port ?? API_PORT}</div>
           </div>
           <div className="flex items-center gap-3">
-            <button className={`tab ${page === "dashboard" ? "tab-active" : ""}`} onClick={() => setPage("dashboard")}>Dashboard</button>
+            <button className={`tab ${page === "realtime" ? "tab-active" : ""}`} onClick={() => setPage("realtime")}>Real-time</button>
+            <button className={`tab ${page === "insights" ? "tab-active" : ""}`} onClick={() => setPage("insights")}>Insights</button>
             <button className={`tab ${page === "settings" ? "tab-active" : ""}`} onClick={() => setPage("settings")}>Settings</button>
             <span className="badge">collector: {health?.collector ?? "-"}</span>
             <span className={`badge ${health?.privileged ? "badge-ok" : "badge-warn"}`}>
@@ -247,31 +248,19 @@ export default function App() {
             </div>
           </section>
         </main>
-      ) : (
+      ) : page === "insights" ? (
         <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[300px_1fr]">
           <aside className="panel space-y-6">
             <div>
-              <div className="panel-title">Filters</div>
-              <input
-                className="input"
-                placeholder="process / ip / port / country / org"
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-              />
-              <div className="mt-4 space-y-2 text-sm text-white/70">
-                <div>Status: {health?.collector ?? "-"}</div>
-                <div>Events: {health?.events_total ?? 0}</div>
-                <div>Uptime: {health ? Math.floor(health.uptime_sec) + "s" : "-"}</div>
+              <div className="panel-title">Insights Overview</div>
+              <div className="space-y-2 text-sm text-white/70">
                 <div>Public Events: {summary?.public_events ?? 0}</div>
                 <div>Threat Hits: {summary?.threat_hits ?? 0}</div>
+                <div>Events (total): {health?.events_total ?? 0}</div>
+                <div>Events/sec: {health?.events_per_sec?.toFixed(1) ?? "-"}</div>
               </div>
-              <div className="mt-4 flex gap-2">
-                <button className="btn" onClick={() => setPaused(p => !p)}>
-                  {paused ? "Resume" : "Pause"}
-                </button>
-                <button className="btn btn-outline" onClick={exportXlsx}>
-                  Export XLSX
-                </button>
+              <div className="mt-4">
+                <button className="btn btn-outline" onClick={exportXlsx}>Export XLSX</button>
               </div>
             </div>
 
@@ -304,7 +293,9 @@ export default function App() {
                 )}
               </div>
             </div>
+          </aside>
 
+          <section className="panel space-y-6">
             <div>
               <div className="panel-title">Alert Feed</div>
               <div className="space-y-2 text-sm">
@@ -342,10 +333,37 @@ export default function App() {
                 )}
               </div>
             </div>
+          </section>
+        </main>
+      ) : (
+        <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[300px_1fr]">
+          <aside className="panel space-y-6">
+            <div>
+              <div className="panel-title">Real-time Controls</div>
+              <input
+                className="input"
+                placeholder="process / ip / port / country / org"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              />
+              <div className="mt-4 space-y-2 text-sm text-white/70">
+                <div>Status: {health?.collector ?? "-"}</div>
+                <div>Events: {health?.events_total ?? 0}</div>
+                <div>Uptime: {health ? Math.floor(health.uptime_sec) + "s" : "-"}</div>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button className="btn" onClick={() => setPaused(p => !p)}>
+                  {paused ? "Resume" : "Pause"}
+                </button>
+                <button className="btn btn-outline" onClick={exportXlsx}>
+                  Export XLSX
+                </button>
+              </div>
+            </div>
           </aside>
 
           <section className="panel">
-            <div className="panel-title">Active Connections</div>
+            <div className="panel-title">Real-time Monitoring</div>
             <div className="table-wrap">
               <table className="table">
                 <thead>

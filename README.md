@@ -5,6 +5,7 @@ Windows-only real-time network telemetry with a browser UI.
 ## Structure
 - `backend/` FastAPI service + collectors
 - `frontend/` React UI
+- `docker-compose.yml` Grafana + PostgreSQL
 
 ## Quick Start (dev)
 Backend:
@@ -23,8 +24,33 @@ npm install
 .\scripts\dev.ps1
 ```
 
+## PostgreSQL + Grafana (Docker)
+```
+docker compose up -d
+```
+- Grafana: `http://localhost:3000` (admin / admin)
+- Postgres: `localhost:5432`
+
+Set backend DB connection:
+```
+setx DATABASE_URL "postgresql+psycopg2://redcybers:redcybers@localhost:5432/redcybers"
+setx REDCYBERS_RETENTION_DAYS "90"
+```
+Restart backend after setting env vars.
+
+## API
+- `GET /health`
+- `GET /summary`
+- `GET /history`
+- `GET /query` (filters: `process_name`, `remote_ip`, `country`, `threat_min`, `start_ts`, `end_ts`)
+- `GET /export/xlsx`
+- `POST /config`
+- `WS /stream`
+
 ## Optional Environment Variables
 Backend:
+- `DATABASE_URL` (PostgreSQL)
+- `REDCYBERS_RETENTION_DAYS`
 - `IPINFO_API_KEY` (ipinfo.io enrichment)
 - `ABUSEIPDB_API_KEY`
 - `ABUSEIPDB_CONFIDENCE_MIN` (default 75)

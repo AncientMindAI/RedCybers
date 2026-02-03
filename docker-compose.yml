@@ -1,0 +1,28 @@
+﻿version: "3.9"
+services:
+  postgres:
+    image: postgres:16
+    container_name: redcybers-postgres
+    environment:
+      POSTGRES_DB: redcybers
+      POSTGRES_USER: redcybers
+      POSTGRES_PASSWORD: redcybers
+    ports:
+      - "5432:5432"
+    volumes:
+      - redcybers_pg:/var/lib/postgresql/data
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: redcybers-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - redcybers_grafana:/var/lib/grafana
+    depends_on:
+      - postgres
+volumes:
+  redcybers_pg:
+  redcybers_grafana:
