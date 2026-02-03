@@ -99,6 +99,33 @@ body {
   color: rgba(255,255,255,0.5);
 }
 
+.alert-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  background: rgba(0,0,0,0.25);
+}
+
+.alert-title {
+  font-weight: 600;
+  color: #e6fff3;
+}
+
+.alert-score {
+  min-width: 42px;
+  text-align: center;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(255,179,71,0.15);
+  border: 1px solid rgba(255,179,71,0.35);
+  color: #ffb347;
+  font-weight: 700;
+}
+
 .table-wrap {
   overflow: auto;
   max-height: 60vh;

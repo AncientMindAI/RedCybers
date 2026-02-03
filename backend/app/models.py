@@ -32,6 +32,7 @@ class Event(BaseModel):
     remote_loc: str = ""
     remote_timezone: str = ""
     threat_sources: List[str] = Field(default_factory=list)
+    threat_score: int = 0
 
     @staticmethod
     def now_iso() -> str:

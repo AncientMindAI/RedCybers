@@ -23,6 +23,7 @@ type EventItem = {
   remote_loc?: string;
   remote_timezone?: string;
   threat_sources?: string[];
+  threat_score?: number;
 };
 
 type Health = {
@@ -40,6 +41,14 @@ type Summary = {
   top_countries: { country: string; count: number }[];
   public_events: number;
   threat_hits: number;
+  alerts: {
+    ts: string;
+    process_name: string;
+    remote_ip: string;
+    remote_country?: string;
+    threat_sources: string[];
+    threat_score: number;
+  }[];
 };
 
 const API_PORT = (import.meta as any).env?.VITE_API_PORT ?? "8787";
@@ -189,6 +198,24 @@ export default function App() {
               )}
             </div>
           </div>
+
+          <div>
+            <div className="panel-title">Alert Feed</div>
+            <div className="space-y-2 text-sm">
+              {(summary?.alerts ?? []).map((alert, idx) => (
+                <div key={idx} className="alert-row">
+                  <div>
+                    <div className="alert-title">{alert.process_name} → {alert.remote_ip}</div>
+                    <div className="muted">{alert.remote_country || "-"} • {alert.threat_sources.join(",")}</div>
+                  </div>
+                  <div className="alert-score">{alert.threat_score}</div>
+                </div>
+              ))}
+              {(!summary?.alerts || summary.alerts.length === 0) && (
+                <div className="muted">No threat alerts yet</div>
+              )}
+            </div>
+          </div>
         </aside>
 
         <section className="panel">
@@ -206,6 +233,7 @@ export default function App() {
                   <th>Country</th>
                   <th>Org</th>
                   <th>Threats</th>
+                  <th>Score</th>
                   <th>State</th>
                 </tr>
               </thead>
@@ -225,11 +253,12 @@ export default function App() {
                         <td>{e.remote_country || "-"}</td>
                         <td>{e.remote_org || "-"}</td>
                         <td>{(e.threat_sources && e.threat_sources.length > 0) ? e.threat_sources.join(",") : "-"}</td>
+                        <td>{e.threat_score ?? 0}</td>
                         <td>{e.state}</td>
                       </tr>
                       {expanded && (
                         <tr className="row-detail">
-                          <td colSpan={10}>
+                          <td colSpan={11}>
                             <div className="detail-grid">
                               <div><span className="muted">Region:</span> {e.remote_region || "-"}</div>
                               <div><span className="muted">City:</span> {e.remote_city || "-"}</div>

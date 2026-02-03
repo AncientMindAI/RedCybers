@@ -35,6 +35,19 @@ def is_public_ip(ip: str) -> bool:
     return addr.is_global
 
 
+def _score_event(event: Event) -> int:
+    score = 0
+    if event.is_public:
+        score += 10
+    if event.threat_sources:
+        score += 60 + min(20, 10 * len(event.threat_sources))
+    if event.remote_org:
+        score += 5
+    if event.remote_asn:
+        score += 5
+    return min(score, 100)
+
+
 class ThreatFeed:
     def __init__(
         self,
@@ -248,3 +261,4 @@ class EnrichmentService:
                 event.remote_hostname = str(cached.get("hostname", ""))
                 event.remote_loc = str(cached.get("loc", ""))
                 event.remote_timezone = str(cached.get("timezone", ""))
+        event.threat_score = _score_event(event)

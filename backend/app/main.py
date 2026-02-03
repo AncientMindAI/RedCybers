@@ -145,11 +145,30 @@ def _summary(events: List[Event]) -> Dict[str, object]:
     ]
 
     threat_hits = sum(1 for e in public_events if e.threat_sources)
+
+    alerts = []
+    for event in reversed(events[-200:]):
+        if not event.threat_sources:
+            continue
+        alerts.append(
+            {
+                "ts": event.ts,
+                "process_name": event.process_name,
+                "remote_ip": event.remote_ip,
+                "remote_country": event.remote_country,
+                "threat_sources": event.threat_sources,
+                "threat_score": event.threat_score,
+            }
+        )
+        if len(alerts) >= 8:
+            break
+
     return {
         "top_public_apps": top_apps,
         "top_countries": top_countries,
         "public_events": len(public_events),
         "threat_hits": threat_hits,
+        "alerts": alerts,
     }
 
 
@@ -258,6 +277,7 @@ async def export_xlsx(limit: int = 2000) -> Response:
         "remote_loc",
         "remote_timezone",
         "threat_sources",
+        "threat_score",
     ]
     ws.append(headers)
     for event in events:
