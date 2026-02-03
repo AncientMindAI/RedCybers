@@ -28,12 +28,13 @@ class CVEStore:
             Column("cwe_ids", Text),
             Column("vendors", Text),
             Column("products", Text),
-            Column("references", Text),
+            Column("reference_urls", Text),
             Column("raw_json", Text),
         )
 
     def start(self) -> None:
         self._meta.create_all(self._engine)
+        self._ensure_columns()
 
     def stop(self) -> None:
         return None
@@ -41,16 +42,20 @@ class CVEStore:
     def upsert(self, records: List[CVERecord]) -> int:
         if not records:
             return 0
-        rows = [record.__dict__ for record in records]
+        rows = []
+        for record in records:
+            row = dict(record.__dict__)
+            row["reference_urls"] = row.pop("references", "")
+            rows.append(row)
         try:
             with self._engine.begin() as conn:
                 for row in rows:
                     sql = text(
                         """
                         INSERT INTO cves (cve_id, published, updated, title, description, severity, cvss_score, cvss_vector,
-                                          cwe_ids, vendors, products, references, raw_json)
+                                          cwe_ids, vendors, products, reference_urls, raw_json)
                         VALUES (:cve_id, :published, :updated, :title, :description, :severity, :cvss_score, :cvss_vector,
-                                :cwe_ids, :vendors, :products, :references, :raw_json)
+                                :cwe_ids, :vendors, :products, :reference_urls, :raw_json)
                         ON CONFLICT (cve_id) DO UPDATE SET
                             published = EXCLUDED.published,
                             updated = EXCLUDED.updated,
@@ -62,7 +67,7 @@ class CVEStore:
                             cwe_ids = EXCLUDED.cwe_ids,
                             vendors = EXCLUDED.vendors,
                             products = EXCLUDED.products,
-                            references = EXCLUDED.references,
+                            reference_urls = EXCLUDED.reference_urls,
                             raw_json = EXCLUDED.raw_json
                         """
                     )
@@ -106,3 +111,15 @@ class CVEStore:
         with self._engine.connect() as conn:
             rows = conn.execute(sql).mappings().all()
         return {"by_severity": [dict(r) for r in rows]}
+
+    def _ensure_columns(self) -> None:
+        columns = [
+            ("reference_urls", "TEXT"),
+        ]
+        for name, col_type in columns:
+            try:
+                sql = text(f"ALTER TABLE cves ADD COLUMN IF NOT EXISTS {name} {col_type}")
+                with self._engine.begin() as conn:
+                    conn.execute(sql)
+            except Exception as exc:
+                logging.debug("column ensure failed for %s: %s", name, exc)
