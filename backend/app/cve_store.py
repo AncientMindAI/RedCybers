@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Dict, List
 
-from sqlalchemy import Column, Float, MetaData, String, Table, Text, create_engine, text
+from sqlalchemy import Column, Float, MetaData, String, Table, Text, bindparam, create_engine, text
 from sqlalchemy.engine import Engine
 
 from .cve import CVERecord
@@ -106,7 +106,7 @@ class CVEStore:
         order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
         min_rank = order.get(min_sev.upper(), 0)
         allowed = [sev for sev, rank in order.items() if rank >= min_rank]
-        params: Dict[str, object] = {"q": q, "like_q": f"%{q}%", "limit": 20, "severities": tuple(allowed)}
+        params: Dict[str, object] = {"q": q, "like_q": f"%{q}%", "limit": 20, "severities": allowed}
         if strict:
             sql = text(
                 """
@@ -116,22 +116,22 @@ class CVEStore:
                         products ~* ('(^|,\\s*)' || :q || '(,|$)')
                         OR vendors ~* ('(^|,\\s*)' || :q || '(,|$)')
                       )
-                  AND severity = ANY(:severities)
+                  AND severity IN :severities
                 ORDER BY cvss_score DESC NULLS LAST
                 LIMIT :limit
                 """
-            )
+            ).bindparams(bindparam("severities", expanding=True))
         else:
             sql = text(
                 """
                 SELECT cve_id, severity, cvss_score
                 FROM cves
                 WHERE (vendors ILIKE :like_q OR products ILIKE :like_q)
-                  AND severity = ANY(:severities)
+                  AND severity IN :severities
                 ORDER BY cvss_score DESC NULLS LAST
                 LIMIT :limit
                 """
-            )
+            ).bindparams(bindparam("severities", expanding=True))
         with self._engine.connect() as conn:
             rows = conn.execute(sql, params).mappings().all()
         return [dict(r) for r in rows]
