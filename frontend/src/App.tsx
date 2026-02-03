@@ -161,6 +161,10 @@ export default function App() {
     window.open(`${API_URL}/export/xlsx`, "_blank");
   };
 
+  const exportPdf = () => {
+    window.open(`${API_URL}/export/pdf`, "_blank");
+  };
+
   const toggleRow = (key: string) => {
     setExpandedKey(prev => (prev === key ? null : key));
   };
@@ -237,7 +241,10 @@ export default function App() {
               <div className="panel-title">Audit Controls</div>
               <div className="space-y-3 text-sm text-white/70">
                 <div>Export evidence snapshots and investigation artifacts.</div>
-                <button className="btn btn-outline" onClick={exportXlsx}>Export XLSX</button>
+                <div className="row">
+                  <button className="btn btn-outline btn-inline" onClick={exportXlsx}>Export XLSX</button>
+                  <button className="btn btn-outline btn-inline" onClick={exportPdf}>Export PDF</button>
+                </div>
               </div>
             </div>
 
@@ -247,7 +254,7 @@ export default function App() {
                 <div className="muted">Investigation queues and audit trails.</div>
                 <div className="row">
                   <button className="tab tab-soon" disabled>Investigations</button>
-                  <button className="tab tab-soon" disabled>Reports</button>
+                  <button className="tab" onClick={exportPdf}>Reports</button>
                 </div>
               </div>
             </div>
@@ -405,7 +412,10 @@ export default function App() {
                   <button className="tab tab-soon" disabled>Investigations</button>
                   <button className="tab tab-soon" disabled>Reports</button>
                 </div>
-                <button className="btn btn-outline" onClick={exportXlsx}>Export XLSX</button>
+                <div className="row">
+                  <button className="btn btn-outline btn-inline" onClick={exportXlsx}>Export XLSX</button>
+                  <button className="btn btn-outline btn-inline" onClick={exportPdf}>Export PDF</button>
+                </div>
               </div>
             </div>
           </aside>

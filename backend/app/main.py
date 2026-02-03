@@ -3,6 +3,8 @@
 from collections import Counter, deque
 from contextlib import asynccontextmanager
 import asyncio
+from datetime import datetime, timezone
+from io import BytesIO
 import json
 import logging
 import os
@@ -15,6 +17,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from openpyxl import Workbook
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import LETTER
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from .collector.etw_collector import ETWCollector
 from .collector.polling_collector import PollingCollector
@@ -212,6 +219,227 @@ def _summary(events: List[Event]) -> Dict[str, object]:
     }
 
 
+def _build_pdf_report(events: List[Event], summary: Dict[str, object], health_payload: Dict[str, object]) -> bytes:
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=LETTER,
+        leftMargin=0.7 * inch,
+        rightMargin=0.7 * inch,
+        topMargin=0.75 * inch,
+        bottomMargin=0.75 * inch,
+        title="RedCybers Audit Report",
+    )
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle(
+        "RedCybersTitle",
+        parent=styles["Title"],
+        fontSize=20,
+        textColor=colors.HexColor("#0b0f14"),
+        spaceAfter=12,
+    )
+    h2 = ParagraphStyle(
+        "RedCybersH2",
+        parent=styles["Heading2"],
+        fontSize=13,
+        textColor=colors.HexColor("#0b0f14"),
+        spaceBefore=10,
+        spaceAfter=6,
+    )
+    body = ParagraphStyle(
+        "RedCybersBody",
+        parent=styles["BodyText"],
+        fontSize=10,
+        leading=13,
+    )
+
+    now = datetime.now(timezone.utc)
+    header = [
+        Paragraph("<b>RedCybers</b> Audit & Threat Telemetry Report", title),
+        Paragraph(f"Generated: {now.strftime('%Y-%m-%d %H:%M:%S UTC')}", body),
+        Paragraph("Scope: Real-time telemetry, threat enrichment, and audit artifacts.", body),
+    ]
+
+    ops = [
+        ["Collector", health_payload.get("collector", "-")],
+        ["Mode", "privileged" if health_payload.get("privileged") else "unprivileged"],
+        ["Events (total)", str(health_payload.get("events_total", 0))],
+        ["Events/sec", f"{health_payload.get('events_per_sec', 0.0):.2f}"],
+        ["Public events", str(summary.get("public_events", 0))],
+        ["Threat hits", str(summary.get("threat_hits", 0))],
+    ]
+    ops_table = Table(ops, colWidths=[2.1 * inch, 3.8 * inch])
+    ops_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
+                ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
+                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]
+        )
+    )
+
+    top_apps = summary.get("top_public_apps", [])
+    apps_rows = [["App", "Connections", "Unique Public IPs"]]
+    for item in top_apps:
+        apps_rows.append([item["app"], str(item["count"]), str(item["unique_public_ips"])])
+    if len(apps_rows) == 1:
+        apps_rows.append(["No public activity observed", "-", "-"])
+    apps_table = Table(apps_rows, colWidths=[3.2 * inch, 1.2 * inch, 1.6 * inch])
+    apps_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e9edf2")),
+                ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+
+    countries = summary.get("top_countries", [])
+    country_rows = [["Country", "Count"]]
+    for item in countries:
+        country_rows.append([item["country"], str(item["count"])])
+    if len(country_rows) == 1:
+        country_rows.append(["No geo data observed", "-"])
+    country_table = Table(country_rows, colWidths=[3.2 * inch, 1.2 * inch])
+    country_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e9edf2")),
+                ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+
+    alerts = summary.get("alerts", [])
+    alert_rows = [["Time", "Process", "Remote IP", "Country", "Threat Score", "Sources"]]
+    for alert in alerts:
+        alert_rows.append(
+            [
+                str(alert.get("ts", ""))[:19],
+                alert.get("process_name", "-"),
+                alert.get("remote_ip", "-"),
+                alert.get("remote_country", "-"),
+                str(alert.get("threat_score", 0)),
+                ",".join(alert.get("threat_sources", [])),
+            ]
+        )
+    if len(alert_rows) == 1:
+        alert_rows.append(["-", "No threat alerts observed", "-", "-", "-", "-"])
+    alert_table = Table(alert_rows, colWidths=[1.2 * inch, 1.5 * inch, 1.2 * inch, 0.9 * inch, 0.8 * inch, 1.3 * inch])
+    alert_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e9edf2")),
+                ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
+            ]
+        )
+    )
+
+    feeds = health_payload.get("feeds", []) or []
+    feed_rows = [["Feed", "Last Count", "Status"]]
+    for feed in feeds:
+        status = "OK" if not feed.get("last_error") else f"Error: {feed.get('last_error')}"
+        feed_rows.append([feed.get("name", "-"), str(feed.get("last_count", 0)), status])
+    if len(feed_rows) == 1:
+        feed_rows.append(["No feeds configured", "-", "-"])
+    feed_table = Table(feed_rows, colWidths=[2.0 * inch, 1.0 * inch, 3.0 * inch])
+    feed_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e9edf2")),
+                ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+
+    crosswalk_rows = [
+        ["ATT&CK Tactic", "Observed Evidence", "NIST CSF", "ISO 27001", "CIS"],
+        ["Initial Access", "Phishing/Email alerts", "DE.CM-7", "A.8.23", "CIS 9"],
+        ["Execution", "PowerShell / script activity", "DE.CM-1", "A.8.9", "CIS 8"],
+        ["Persistence", "Autoruns / services", "PR.IP-1", "A.8.12", "CIS 4"],
+        ["Command & Control", "DNS/Firewall beaconing", "DE.CM-1", "A.8.16", "CIS 13"],
+        ["Exfiltration", "DLP/NDR alerts", "DE.CM-7", "A.8.24", "CIS 14"],
+    ]
+    crosswalk_table = Table(crosswalk_rows, colWidths=[1.2 * inch, 2.0 * inch, 0.8 * inch, 0.9 * inch, 0.6 * inch])
+    crosswalk_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e9edf2")),
+                ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
+            ]
+        )
+    )
+
+    story = []
+    story.extend(header)
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("Executive Summary", h2))
+    story.append(Paragraph(
+        "This report summarizes observed RedCybers telemetry, enrichment, and audit artifacts. "
+        "It is designed to support a coherent audit trail aligned with NIST CSF, ISO/IEC 27001, "
+        "and CIS Critical Security Controls while mapping detections to MITRE ATT&CK.",
+        body,
+    ))
+    story.append(Spacer(1, 8))
+    story.append(Paragraph("Required Feeds & Telemetry (Template)", h2))
+    story.append(Paragraph(
+        "EDR/XDR telemetry, identity logs (Entra ID/AD/Okta), email security, firewall/NDR, DNS, "
+        "cloud control plane logs, vulnerability scanner output, and asset inventory (CMDB). "
+        "Audits require evidence of log source coverage beyond endpoint telemetry.",
+        body,
+    ))
+    story.append(Spacer(1, 8))
+    story.append(Paragraph("Operational Snapshot", h2))
+    story.append(ops_table)
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("Top Public Applications", h2))
+    story.append(apps_table)
+    story.append(Spacer(1, 8))
+    story.append(Paragraph("Top Countries (Public IPs)", h2))
+    story.append(country_table)
+    story.append(Spacer(1, 8))
+    story.append(Paragraph("Threat Alerts (Observed Window)", h2))
+    story.append(alert_table)
+    story.append(Spacer(1, 8))
+    story.append(Paragraph("Threat Feed Status", h2))
+    story.append(feed_table)
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("ATT&CK → NIST/ISO/CIS Crosswalk Template", h2))
+    story.append(Paragraph(
+        "The table below provides a practitioner-aligned mapping. Replace with observed evidence "
+        "as coverage expands (e.g., Red Canary detections, firewall/NDR validation, identity logs).",
+        body,
+    ))
+    story.append(Spacer(1, 6))
+    story.append(crosswalk_table)
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("Evidence & Audit Artifacts (Required)", h2))
+    story.append(Paragraph(
+        "Include timestamped alert samples, detection logic summaries, log source enablement screenshots, "
+        "incident closure notes, control ownership assignments, and exception registers.",
+        body,
+    ))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("Gaps & Roadmap", h2))
+    story.append(Paragraph(
+        "Document missing ATT&CK techniques, planned telemetry (EDR/XDR, identity, DNS, NDR), and "
+        "target maturity state with remediation timelines.",
+        body,
+    ))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     state.loop = asyncio.get_running_loop()
@@ -371,8 +599,6 @@ async def export_xlsx(limit: int = 2000) -> Response:
         data["threat_sources"] = ",".join(event.threat_sources)
         ws.append([data.get(h, "") for h in headers])
 
-    from io import BytesIO
-
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -381,6 +607,27 @@ async def export_xlsx(limit: int = 2000) -> Response:
         content=buf.read(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=redcybers-export.xlsx"},
+    )
+
+
+@app.get("/export/pdf")
+async def export_pdf(limit: int = 2000) -> Response:
+    events = list(state.buffer)[-min(limit, 10000):]
+    summary_payload = _summary(events)
+    health_payload = {
+        "collector": state.status["collector"],
+        "privileged": state.status["privileged"],
+        "events_total": state.status["events_total"],
+        "events_per_sec": state.status["events_per_sec"],
+        "host": state.status.get("host"),
+        "port": state.status.get("port"),
+        "feeds": state.enrichment.threats.status() if state.enrichment else [],
+    }
+    pdf = _build_pdf_report(events, summary_payload, health_payload)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=redcybers-report.pdf"},
     )
 
 

@@ -76,6 +76,10 @@ body {
   text-align: center;
 }
 
+.btn-inline {
+  width: auto;
+}
+
 .btn-outline {
   background: transparent;
   color: #3fffb1;
