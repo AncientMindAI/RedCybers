@@ -55,11 +55,15 @@ class ThreatFeed:
         url: str,
         headers: Optional[Dict[str, str]] = None,
         interval_sec: int = 3600,
+        mode: str = "text",
+        days: int = 1,
     ) -> None:
         self.name = name
         self.url = url
         self.headers = headers or {}
         self.interval_sec = interval_sec
+        self.mode = mode
+        self.days = days
         self.next_run = 0.0
         self.last_count = 0
         self.last_error = ""
@@ -77,8 +81,10 @@ class ThreatFeedManager:
         self._feeds = []
         abuse_key = os.getenv("ABUSEIPDB_API_KEY", "").strip()
         otx_key = os.getenv("OTX_API_KEY", "").strip()
+        threatfox_key = os.getenv("THREATFOX_API_KEY", "").strip()
         abuse_min = os.getenv("ABUSEIPDB_CONFIDENCE_MIN", "75").strip()
         abuse_limit = os.getenv("ABUSEIPDB_LIMIT", "100000").strip()
+        threatfox_days = int(os.getenv("THREATFOX_DAYS", "1").strip() or 1)
 
         if abuse_key:
             url = (
@@ -101,13 +107,20 @@ class ThreatFeedManager:
             "FEODO_URL",
             "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt",
         )
-        threatfox_url = os.getenv(
-            "THREATFOX_URL",
-            "https://threatfox.abuse.ch/downloads/ipblocklist.txt",
-        )
-
         self._feeds.append(ThreatFeed("Feodo", feodo_url))
-        self._feeds.append(ThreatFeed("ThreatFox", threatfox_url))
+
+        if threatfox_key:
+            self._feeds.append(
+                ThreatFeed(
+                    "ThreatFox",
+                    "https://threatfox-api.abuse.ch/api/v1/",
+                    headers={"Auth-Key": threatfox_key},
+                    mode="threatfox_api",
+                    days=threatfox_days,
+                )
+            )
+        else:
+            logging.info("ThreatFox disabled (missing THREATFOX_API_KEY)")
 
     def start(self) -> None:
         self.configure()
@@ -140,9 +153,31 @@ class ThreatFeedManager:
             self._stop_event.wait(30)
 
     def _fetch_feed(self, feed: ThreatFeed) -> Set[str]:
+        if feed.mode == "threatfox_api":
+            return self._fetch_threatfox(feed)
         resp = requests.get(feed.url, headers=feed.headers, timeout=20)
         resp.raise_for_status()
         return _extract_ipv4(resp.text)
+
+    def _fetch_threatfox(self, feed: ThreatFeed) -> Set[str]:
+        payload = {"query": "get_iocs", "days": max(1, min(feed.days, 7))}
+        resp = requests.post(feed.url, headers=feed.headers, json=payload, timeout=20)
+        resp.raise_for_status()
+        data = resp.json() if resp.text else {}
+        if data.get("query_status") != "ok":
+            return set()
+        ips: Set[str] = set()
+        for item in data.get("data", []):
+            ioc = str(item.get("ioc", ""))
+            if not ioc:
+                continue
+            ip = ioc.split(":", 1)[0].strip()
+            try:
+                ipaddress.ip_address(ip)
+            except ValueError:
+                continue
+            ips.add(ip)
+        return ips
 
     def check_ip(self, ip: str) -> List[str]:
         hits: List[str] = []

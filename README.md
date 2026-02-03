@@ -32,7 +32,8 @@ Backend:
 - `OTX_API_KEY`
 - `OTX_EXPORT_URL`
 - `FEODO_URL`
-- `THREATFOX_URL`
+- `THREATFOX_API_KEY`
+- `THREATFOX_DAYS` (default 1)
 - `NETWATCH_PORT_FILE` (override port file path)
 
 Frontend:
