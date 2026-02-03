@@ -86,6 +86,7 @@ export default function App() {
   const [config, setConfig] = useState<ConfigPayload>({});
   const [saveStatus, setSaveStatus] = useState<string>("");
   const wsRef = useRef<WebSocket | null>(null);
+  const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "failed">("connecting");
 
   useEffect(() => {
     const load = () => {
@@ -103,6 +104,10 @@ export default function App() {
 
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
+    setWsStatus("connecting");
+
+    ws.onopen = () => setWsStatus("connected");
+    ws.onerror = () => setWsStatus("failed");
 
     ws.onmessage = (msg) => {
       try {
@@ -120,10 +125,23 @@ export default function App() {
 
     ws.onclose = () => {
       wsRef.current = null;
+      if (wsStatus !== "failed") setWsStatus("failed");
     };
 
     return () => ws.close();
   }, [paused, page]);
+
+  useEffect(() => {
+    if (page !== "realtime") return;
+    if (wsStatus === "connected") return;
+    const id = setInterval(() => {
+      fetch(`${API_URL}/history?limit=200`)
+        .then((r) => r.json())
+        .then((data) => Array.isArray(data) && setEvents(data.reverse()))
+        .catch(() => null);
+    }, 2000);
+    return () => clearInterval(id);
+  }, [page, wsStatus]);
 
   const filtered = useMemo(() => {
     if (!filter.trim()) return events;
@@ -188,6 +206,9 @@ export default function App() {
               {health?.privileged ? "privileged" : "unprivileged"}
             </span>
             <span className="badge">eps: {health?.events_per_sec?.toFixed(1) ?? "-"}</span>
+            <span className={`badge ${wsStatus === "connected" ? "badge-ok" : "badge-warn"}`}>
+              ws: {wsStatus}
+            </span>
           </div>
         </div>
       </header>
