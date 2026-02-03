@@ -1,17 +1,20 @@
 ﻿{
+  "id": null,
   "uid": "redcybers-investigations",
   "title": "RedCybers Investigations",
   "tags": ["redcybers", "investigations"],
   "timezone": "browser",
+  "editable": true,
   "schemaVersion": 38,
   "version": 1,
   "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
   "templating": {
     "list": [
       {
         "name": "app",
         "type": "query",
-        "datasource": {"type": "postgres", "uid": "RedCybers-Postgres"},
+        "datasource": {"type": "postgres", "uid": "redcybers-postgres"},
         "query": "SELECT DISTINCT process_name AS __text, process_name AS __value FROM events ORDER BY 1",
         "refresh": 2,
         "includeAll": true,
@@ -21,7 +24,7 @@
       {
         "name": "country",
         "type": "query",
-        "datasource": {"type": "postgres", "uid": "RedCybers-Postgres"},
+        "datasource": {"type": "postgres", "uid": "redcybers-postgres"},
         "query": "SELECT DISTINCT remote_country AS __text, remote_country AS __value FROM events WHERE remote_country <> '' ORDER BY 1",
         "refresh": 2,
         "includeAll": true,
@@ -41,7 +44,7 @@
       "type": "timeseries",
       "title": "Threat Score Events (per minute)",
       "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
-      "datasource": {"type": "postgres", "uid": "RedCybers-Postgres"},
+      "datasource": {"type": "postgres", "uid": "redcybers-postgres"},
       "targets": [
         {
           "format": "time_series",
@@ -54,7 +57,7 @@
       "type": "timeseries",
       "title": "Total Events (per minute)",
       "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
-      "datasource": {"type": "postgres", "uid": "RedCybers-Postgres"},
+      "datasource": {"type": "postgres", "uid": "redcybers-postgres"},
       "targets": [
         {
           "format": "time_series",
@@ -67,7 +70,7 @@
       "type": "table",
       "title": "Top Suspicious IPs",
       "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
-      "datasource": {"type": "postgres", "uid": "RedCybers-Postgres"},
+      "datasource": {"type": "postgres", "uid": "redcybers-postgres"},
       "targets": [
         {
           "format": "table",
@@ -80,7 +83,7 @@
       "type": "table",
       "title": "Top Talkers (Apps)",
       "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
-      "datasource": {"type": "postgres", "uid": "RedCybers-Postgres"},
+      "datasource": {"type": "postgres", "uid": "redcybers-postgres"},
       "targets": [
         {
           "format": "table",
@@ -93,7 +96,7 @@
       "type": "table",
       "title": "Recent Alerts (Filtered)",
       "gridPos": {"x": 0, "y": 16, "w": 24, "h": 10},
-      "datasource": {"type": "postgres", "uid": "RedCybers-Postgres"},
+      "datasource": {"type": "postgres", "uid": "redcybers-postgres"},
       "targets": [
         {
           "format": "table",

@@ -2,6 +2,7 @@
 
 datasources:
   - name: RedCybers-Postgres
+    uid: redcybers-postgres
     type: postgres
     access: proxy
     url: postgres:5432

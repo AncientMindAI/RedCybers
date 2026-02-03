@@ -1,17 +1,20 @@
 ﻿{
+  "id": null,
   "uid": "redcybers-overview",
   "title": "RedCybers Overview",
   "tags": ["redcybers", "security"],
   "timezone": "browser",
+  "editable": true,
   "schemaVersion": 38,
   "version": 1,
   "refresh": "10s",
+  "time": { "from": "now-6h", "to": "now" },
   "panels": [
     {
       "type": "timeseries",
       "title": "Events (per minute)",
       "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
-      "datasource": {"type": "postgres", "uid": "RedCybers-Postgres"},
+      "datasource": {"type": "postgres", "uid": "redcybers-postgres"},
       "targets": [
         {
           "format": "time_series",
@@ -24,7 +27,7 @@
       "type": "timeseries",
       "title": "Threat Hits (per minute)",
       "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
-      "datasource": {"type": "postgres", "uid": "RedCybers-Postgres"},
+      "datasource": {"type": "postgres", "uid": "redcybers-postgres"},
       "targets": [
         {
           "format": "time_series",
@@ -37,7 +40,7 @@
       "type": "table",
       "title": "Top Public Apps",
       "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
-      "datasource": {"type": "postgres", "uid": "RedCybers-Postgres"},
+      "datasource": {"type": "postgres", "uid": "redcybers-postgres"},
       "targets": [
         {
           "format": "table",
@@ -50,7 +53,7 @@
       "type": "table",
       "title": "Top Countries",
       "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
-      "datasource": {"type": "postgres", "uid": "RedCybers-Postgres"},
+      "datasource": {"type": "postgres", "uid": "redcybers-postgres"},
       "targets": [
         {
           "format": "table",
@@ -63,7 +66,7 @@
       "type": "table",
       "title": "Recent Threat Alerts",
       "gridPos": {"x": 0, "y": 16, "w": 24, "h": 8},
-      "datasource": {"type": "postgres", "uid": "RedCybers-Postgres"},
+      "datasource": {"type": "postgres", "uid": "redcybers-postgres"},
       "targets": [
         {
           "format": "table",
