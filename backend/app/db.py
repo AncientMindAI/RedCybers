@@ -54,6 +54,13 @@ class DBWriter:
             Column("remote_timezone", String(64)),
             Column("threat_sources", Text),
             Column("threat_score", Integer),
+            Column("mitre_tactic", String(64)),
+            Column("mitre_technique", String(128)),
+            Column("mitre_technique_id", String(32)),
+            Column("mitre_confidence", Integer),
+            Column("relevance_score", Integer),
+            Column("suppressed", Integer),
+            Column("suppression_reason", String(64)),
         )
         self._queue: queue.Queue[Event] = queue.Queue(maxsize=10000)
         self._stop_event = threading.Event()
@@ -62,6 +69,7 @@ class DBWriter:
 
     def start(self) -> None:
         self._meta.create_all(self._engine)
+        self._ensure_columns()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
         self._retention_thread = threading.Thread(target=self._retention_loop, daemon=True)
@@ -115,7 +123,9 @@ class DBWriter:
             SELECT ts, pid, process_name, process_path, user_name, direction, protocol,
                    local_ip, local_port, remote_ip, remote_port, state, is_public,
                    remote_country, remote_region, remote_city, remote_org, remote_asn,
-                   remote_hostname, remote_loc, remote_timezone, threat_sources, threat_score
+                   remote_hostname, remote_loc, remote_timezone, threat_sources, threat_score,
+                   mitre_tactic, mitre_technique, mitre_technique_id, mitre_confidence,
+                   relevance_score, suppressed, suppression_reason
             FROM events
             WHERE {where}
             ORDER BY ts DESC
@@ -173,6 +183,13 @@ class DBWriter:
                     "remote_timezone": event.remote_timezone,
                     "threat_sources": ",".join(event.threat_sources),
                     "threat_score": event.threat_score,
+                    "mitre_tactic": event.mitre_tactic,
+                    "mitre_technique": event.mitre_technique,
+                    "mitre_technique_id": event.mitre_technique_id,
+                    "mitre_confidence": event.mitre_confidence,
+                    "relevance_score": event.relevance_score,
+                    "suppressed": 1 if event.suppressed else 0,
+                    "suppression_reason": event.suppression_reason,
                 }
             )
         if not rows:
@@ -196,6 +213,24 @@ class DBWriter:
         sql = text("DELETE FROM events WHERE ts < :cutoff")
         with self._engine.begin() as conn:
             conn.execute(sql, {"cutoff": cutoff})
+
+    def _ensure_columns(self) -> None:
+        columns = [
+            ("mitre_tactic", "VARCHAR(64)"),
+            ("mitre_technique", "VARCHAR(128)"),
+            ("mitre_technique_id", "VARCHAR(32)"),
+            ("mitre_confidence", "INTEGER"),
+            ("relevance_score", "INTEGER"),
+            ("suppressed", "INTEGER"),
+            ("suppression_reason", "VARCHAR(64)"),
+        ]
+        for name, col_type in columns:
+            try:
+                sql = text(f"ALTER TABLE events ADD COLUMN IF NOT EXISTS {name} {col_type}")
+                with self._engine.begin() as conn:
+                    conn.execute(sql)
+            except Exception as exc:
+                logging.debug("column ensure failed for %s: %s", name, exc)
 
 
 def get_database_url() -> str:

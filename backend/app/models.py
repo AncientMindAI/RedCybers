@@ -33,6 +33,13 @@ class Event(BaseModel):
     remote_timezone: str = ""
     threat_sources: List[str] = Field(default_factory=list)
     threat_score: int = 0
+    mitre_tactic: str = ""
+    mitre_technique: str = ""
+    mitre_technique_id: str = ""
+    mitre_confidence: int = 0
+    relevance_score: int = 0
+    suppressed: bool = False
+    suppression_reason: str = ""
 
     @staticmethod
     def now_iso() -> str:

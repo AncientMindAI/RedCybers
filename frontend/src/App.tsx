@@ -24,6 +24,13 @@ type EventItem = {
   remote_timezone?: string;
   threat_sources?: string[];
   threat_score?: number;
+  mitre_tactic?: string;
+  mitre_technique?: string;
+  mitre_technique_id?: string;
+  mitre_confidence?: number;
+  relevance_score?: number;
+  suppressed?: boolean;
+  suppression_reason?: string;
 };
 
 type FeedStatus = {
@@ -49,6 +56,10 @@ type Summary = {
   top_countries: { country: string; count: number }[];
   public_events: number;
   threat_hits: number;
+  suppressed_events?: number;
+  mitre_tactics?: { tactic: string; count: number }[];
+  mitre_techniques?: { technique_id: string; count: number }[];
+  mitre_breakdown?: Record<string, { technique_id: string; count: number }[]>;
   alerts: {
     ts: string;
     process_name: string;
@@ -69,6 +80,11 @@ type ConfigPayload = {
   abuseipdb_limit?: string;
   feodo_url?: string;
   otx_export_url?: string;
+  mitre_min_score?: number;
+  suppress_private?: boolean;
+  suppress_loopback?: boolean;
+  suppress_processes?: string[];
+  suppress_ports?: string[];
 };
 
 const API_PORT = (import.meta as any).env?.VITE_API_PORT ?? "8787";
@@ -80,10 +96,12 @@ export default function App() {
   const [page, setPage] = useState<"realtime" | "insights" | "audit" | "grafana" | "settings">("realtime");
   const [events, setEvents] = useState<EventItem[]>([]);
   const [paused, setPaused] = useState(false);
+  const [showSuppressed, setShowSuppressed] = useState(false);
   const [filter, setFilter] = useState("");
   const [health, setHealth] = useState<Health | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [selectedTactic, setSelectedTactic] = useState<string>("");
   const [config, setConfig] = useState<ConfigPayload>({});
   const [saveStatus, setSaveStatus] = useState<string>("");
   const wsRef = useRef<WebSocket | null>(null);
@@ -146,16 +164,18 @@ export default function App() {
   }, [page, wsStatus]);
 
   const filtered = useMemo(() => {
-    if (!filter.trim()) return events;
+    const base = showSuppressed ? events : events.filter(e => !e.suppressed);
+    if (!filter.trim()) return base;
     const f = filter.toLowerCase();
-    return events.filter(e =>
+    return base.filter(e =>
       e.process_name.toLowerCase().includes(f) ||
       e.remote_ip.toLowerCase().includes(f) ||
       String(e.remote_port).includes(f) ||
       (e.remote_country ?? "").toLowerCase().includes(f) ||
-      (e.remote_org ?? "").toLowerCase().includes(f)
+      (e.remote_org ?? "").toLowerCase().includes(f) ||
+      (e.mitre_technique_id ?? "").toLowerCase().includes(f)
     );
-  }, [events, filter]);
+  }, [events, filter, showSuppressed]);
 
   const exportXlsx = () => {
     window.open(`${API_URL}/export/xlsx`, "_blank");
@@ -191,6 +211,11 @@ export default function App() {
 
   const updateConfig = (key: keyof ConfigPayload, value: string | number) => {
     setConfig(prev => ({ ...prev, [key]: value }));
+  };
+
+  const listValue = (value: string[] | undefined) => {
+    if (!value) return "";
+    return Array.isArray(value) ? value.join(", ") : String(value);
   };
 
   return (
@@ -355,6 +380,36 @@ export default function App() {
               </div>
             </div>
 
+            <div>
+              <div className="panel-title">Triage & ATT&CK</div>
+              <div className="field">
+                <label>Minimum Relevance Score</label>
+                <input className="input" type="number" min={0} max={100} value={config.mitre_min_score ?? 25} onChange={(e) => updateConfig("mitre_min_score", Number(e.target.value))} />
+              </div>
+              <div className="field">
+                <label>Suppress Private IPs</label>
+                <select className="input" value={String(config.suppress_private ?? false)} onChange={(e) => updateConfig("suppress_private", e.target.value === "true")}>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Suppress Loopback</label>
+                <select className="input" value={String(config.suppress_loopback ?? true)} onChange={(e) => updateConfig("suppress_loopback", e.target.value === "true")}>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Suppress Processes (comma separated)</label>
+                <input className="input" value={listValue(config.suppress_processes)} onChange={(e) => updateConfig("suppress_processes", e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Suppress Ports (comma separated)</label>
+                <input className="input" value={listValue(config.suppress_ports)} onChange={(e) => updateConfig("suppress_ports", e.target.value)} />
+              </div>
+            </div>
+
             <div className="row">
               <button className="btn" onClick={saveConfig}>Save Settings</button>
               <span className="muted">{saveStatus}</span>
@@ -372,6 +427,7 @@ export default function App() {
               <div className="space-y-2 text-sm text-white/70">
                 <div>Public Events: {summary?.public_events ?? 0}</div>
                 <div>Threat Hits: {summary?.threat_hits ?? 0}</div>
+                <div>Suppressed: {summary?.suppressed_events ?? 0}</div>
                 <div>Events (total): {health?.events_total ?? 0}</div>
                 <div>Events/sec: {health?.events_per_sec?.toFixed(1) ?? "-"}</div>
               </div>
@@ -421,6 +477,21 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            <div>
+              <div className="panel-title">MITRE ATT&CK</div>
+              <div className="space-y-2 text-sm">
+                {(summary?.mitre_tactics ?? []).slice(0, 6).map((item, idx) => (
+                  <div key={idx} className="row">
+                    <span>{item.tactic}</span>
+                    <span className="muted">{item.count}</span>
+                  </div>
+                ))}
+                {(!summary?.mitre_tactics || summary.mitre_tactics.length === 0) && (
+                  <div className="muted">No ATT&CK mapping yet</div>
+                )}
+              </div>
+            </div>
           </aside>
 
           <section className="panel space-y-6">
@@ -461,6 +532,36 @@ export default function App() {
                 )}
               </div>
             </div>
+
+            <div>
+              <div className="panel-title">ATT&CK Mapping</div>
+              <div className="attack-grid">
+                {(summary?.mitre_tactics ?? []).slice(0, 8).map((item, idx) => (
+                  <div
+                    key={idx}
+                    className={`attack-tile ${selectedTactic === item.tactic ? "attack-active" : ""}`}
+                    onClick={() => setSelectedTactic(selectedTactic === item.tactic ? "" : item.tactic)}
+                  >
+                    <div className="attack-name">{item.tactic}</div>
+                    <div className="attack-count">{item.count}</div>
+                  </div>
+                ))}
+                {(!summary?.mitre_tactics || summary.mitre_tactics.length === 0) && (
+                  <div className="muted">No mapped tactics observed</div>
+                )}
+              </div>
+              <div className="mt-4 space-y-2 text-sm">
+                {(selectedTactic && summary?.mitre_breakdown?.[selectedTactic]
+                  ? summary.mitre_breakdown[selectedTactic]
+                  : (summary?.mitre_techniques ?? [])
+                ).map((item, idx) => (
+                  <div key={idx} className="row">
+                    <span>{item.technique_id}</span>
+                    <span className="muted">{item.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </section>
         </main>
       ) : (
@@ -474,6 +575,14 @@ export default function App() {
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
               />
+              <div className="mt-3 flex items-center gap-2 text-xs text-white/70">
+                <input
+                  type="checkbox"
+                  checked={showSuppressed}
+                  onChange={(e) => setShowSuppressed(e.target.checked)}
+                />
+                <span>Show suppressed</span>
+              </div>
               <div className="mt-4 space-y-2 text-sm text-white/70">
                 <div>Status: {health?.collector ?? "-"}</div>
                 <div>Events: {health?.events_total ?? 0}</div>
@@ -501,6 +610,7 @@ export default function App() {
                     <th>Remote</th>
                     <th>Country</th>
                     <th>Org</th>
+                    <th>ATT&CK</th>
                     <th>Threats</th>
                     <th>Score</th>
                     <th>State</th>
@@ -512,7 +622,7 @@ export default function App() {
                     const expanded = expandedKey === key;
                     return (
                       <Fragment key={key}>
-                        <tr className="row-click" onClick={() => toggleRow(key)}>
+                        <tr className={`row-click ${e.suppressed ? "row-suppressed" : ""}`} onClick={() => toggleRow(key)}>
                           <td>{new Date(e.ts).toLocaleTimeString()}</td>
                           <td>{e.process_name}</td>
                           <td>{e.pid}</td>
@@ -521,13 +631,14 @@ export default function App() {
                           <td>{e.remote_ip}:{e.remote_port}</td>
                           <td>{e.remote_country || "-"}</td>
                           <td>{e.remote_org || "-"}</td>
+                          <td>{e.mitre_technique_id || "-"}</td>
                           <td>{(e.threat_sources && e.threat_sources.length > 0) ? e.threat_sources.join(",") : "-"}</td>
                           <td>{e.threat_score ?? 0}</td>
                           <td>{e.state}</td>
                         </tr>
                         {expanded && (
                           <tr className="row-detail">
-                            <td colSpan={11}>
+                            <td colSpan={12}>
                               <div className="detail-grid">
                                 <div><span className="muted">Region:</span> {e.remote_region || "-"}</div>
                                 <div><span className="muted">City:</span> {e.remote_city || "-"}</div>
@@ -535,6 +646,9 @@ export default function App() {
                                 <div><span className="muted">Hostname:</span> {e.remote_hostname || "-"}</div>
                                 <div><span className="muted">Loc:</span> {e.remote_loc || "-"}</div>
                                 <div><span className="muted">Timezone:</span> {e.remote_timezone || "-"}</div>
+                                <div><span className="muted">ATT&CK:</span> {e.mitre_tactic || "-"} {e.mitre_technique_id ? `(${e.mitre_technique_id})` : ""}</div>
+                                <div><span className="muted">Relevance:</span> {e.relevance_score ?? 0}</div>
+                                <div><span className="muted">Suppressed:</span> {e.suppressed ? e.suppression_reason || "yes" : "no"}</div>
                               </div>
                             </td>
                           </tr>

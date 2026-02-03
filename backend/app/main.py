@@ -27,6 +27,7 @@ from .collector.etw_collector import ETWCollector
 from .collector.polling_collector import PollingCollector
 from .db import DBWriter, get_database_url
 from .enrichment import EnrichmentService
+from .mitre import best_match, map_event
 from .models import Event
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
@@ -52,6 +53,11 @@ class AppState:
             "otx_export_url": "",
             "abuseipdb_confidence_min": "75",
             "abuseipdb_limit": "100000",
+            "mitre_min_score": 25,
+            "suppress_private": False,
+            "suppress_loopback": True,
+            "suppress_processes": [],
+            "suppress_ports": [],
         }
         self.status: Dict[str, object] = {
             "collector": "none",
@@ -75,6 +81,7 @@ class AppState:
     def enrich_event(self, event: Event) -> None:
         if self.enrichment is not None:
             self.enrichment.enrich(event)
+        _apply_mitre_and_triage(event, self.config)
 
     def enqueue(self, event: Event) -> None:
         self.buffer.append(event)
@@ -168,6 +175,79 @@ def _get_port_file() -> str:
     return os.path.join(base, ".netwatch-port")
 
 
+def _parse_list(value: object) -> List[str]:
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _parse_int_list(value: object) -> List[int]:
+    items = _parse_list(value)
+    ints: List[int] = []
+    for item in items:
+        try:
+            ints.append(int(item))
+        except ValueError:
+            continue
+    return ints
+
+
+def _apply_mitre_and_triage(event: Event, config: Dict[str, object]) -> None:
+    matches = map_event(event)
+    top = best_match(matches)
+    if top:
+        event.mitre_tactic = top.tactic
+        event.mitre_technique = top.technique
+        event.mitre_technique_id = top.technique_id
+        event.mitre_confidence = top.confidence
+
+    score = int(event.threat_score)
+    tactic_weight = {
+        "Command and Control": 20,
+        "Exfiltration": 25,
+        "Credential Access": 20,
+        "Lateral Movement": 15,
+        "Execution": 10,
+        "Defense Evasion": 10,
+        "Persistence": 10,
+    }
+    score += tactic_weight.get(event.mitre_tactic, 0)
+    if event.is_public:
+        score += 5
+    if event.mitre_confidence:
+        score += min(20, int(event.mitre_confidence / 4))
+    event.relevance_score = min(score, 100)
+
+    suppress_private = bool(config.get("suppress_private", True))
+    suppress_loopback = bool(config.get("suppress_loopback", True))
+    suppress_processes = {p.lower() for p in _parse_list(config.get("suppress_processes", []))}
+    suppress_ports = set(_parse_int_list(config.get("suppress_ports", [])))
+    min_score = int(config.get("mitre_min_score", 25))
+
+    if suppress_loopback and event.remote_ip.startswith("127."):
+        event.suppressed = True
+        event.suppression_reason = "loopback"
+        return
+    if suppress_private and not event.is_public:
+        event.suppressed = True
+        event.suppression_reason = "private"
+        return
+    if event.process_name.lower() in suppress_processes:
+        event.suppressed = True
+        event.suppression_reason = "process"
+        return
+    if event.remote_port in suppress_ports:
+        event.suppressed = True
+        event.suppression_reason = "port"
+        return
+    if event.relevance_score < min_score:
+        event.suppressed = True
+        event.suppression_reason = "low-score"
+
+
 def _write_port_file(port: int) -> None:
     path = _get_port_file()
     try:
@@ -179,7 +259,8 @@ def _write_port_file(port: int) -> None:
 
 
 def _summary(events: List[Event]) -> Dict[str, object]:
-    public_events = [e for e in events if e.is_public]
+    visible = [e for e in events if not e.suppressed]
+    public_events = [e for e in visible if e.is_public]
     by_app = Counter([e.process_name for e in public_events])
     top_apps = []
     for app, count in by_app.most_common(5):
@@ -192,9 +273,10 @@ def _summary(events: List[Event]) -> Dict[str, object]:
     ]
 
     threat_hits = sum(1 for e in public_events if e.threat_sources)
+    suppressed_count = len([e for e in events if e.suppressed])
 
     alerts = []
-    for event in reversed(events[-200:]):
+    for event in reversed(visible[-200:]):
         if not event.threat_sources:
             continue
         alerts.append(
@@ -210,12 +292,27 @@ def _summary(events: List[Event]) -> Dict[str, object]:
         if len(alerts) >= 8:
             break
 
+    mitre_tactics = Counter([e.mitre_tactic for e in public_events if e.mitre_tactic])
+    mitre_techniques = Counter([e.mitre_technique_id for e in public_events if e.mitre_technique_id])
+    breakdown: Dict[str, Counter] = {}
+    for event in public_events:
+        if not event.mitre_tactic or not event.mitre_technique_id:
+            continue
+        breakdown.setdefault(event.mitre_tactic, Counter())
+        breakdown[event.mitre_tactic][event.mitre_technique_id] += 1
     return {
         "top_public_apps": top_apps,
         "top_countries": top_countries,
         "public_events": len(public_events),
         "threat_hits": threat_hits,
         "alerts": alerts,
+        "suppressed_events": suppressed_count,
+        "mitre_tactics": [{"tactic": k, "count": v} for k, v in mitre_tactics.most_common()],
+        "mitre_techniques": [{"technique_id": k, "count": v} for k, v in mitre_techniques.most_common(10)],
+        "mitre_breakdown": {
+            tactic: [{"technique_id": k, "count": v} for k, v in counter.most_common(8)]
+            for tactic, counter in breakdown.items()
+        },
     }
 
 
@@ -275,6 +372,7 @@ def _build_pdf_report(events: List[Event], summary: Dict[str, object], health_pa
         ["Events/sec", f"{health_payload.get('events_per_sec', 0.0):.2f}"],
         ["Public events", str(summary.get("public_events", 0))],
         ["Threat hits", str(summary.get("threat_hits", 0))],
+        ["Suppressed events", str(summary.get("suppressed_events", 0))],
     ]
     ops_table = Table(ops, colWidths=[2.1 * inch, 3.8 * inch])
     ops_table.setStyle(
@@ -419,6 +517,24 @@ def _build_pdf_report(events: List[Event], summary: Dict[str, object], health_pa
     story.append(Spacer(1, 8))
     story.append(Paragraph("Threat Feed Status", h2))
     story.append(feed_table)
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("MITRE ATT&CK Coverage (Observed)", h2))
+    tactic_rows = [["Tactic", "Count"]]
+    for item in summary.get("mitre_tactics", []):
+        tactic_rows.append([item.get("tactic", "-"), str(item.get("count", 0))])
+    if len(tactic_rows) == 1:
+        tactic_rows.append(["No mapped tactics observed", "-"])
+    tactic_table = Table(tactic_rows, colWidths=[3.0 * inch, 1.0 * inch])
+    tactic_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e9edf2")),
+                ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+    story.append(tactic_table)
     story.append(Spacer(1, 10))
     story.append(Paragraph("ATT&CK → NIST/ISO/CIS Crosswalk Template", h2))
     story.append(Paragraph(
@@ -600,6 +716,13 @@ async def export_xlsx(limit: int = 2000) -> Response:
         "remote_timezone",
         "threat_sources",
         "threat_score",
+        "mitre_tactic",
+        "mitre_technique",
+        "mitre_technique_id",
+        "mitre_confidence",
+        "relevance_score",
+        "suppressed",
+        "suppression_reason",
     ]
     ws.append(headers)
     for event in events:
