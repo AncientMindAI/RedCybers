@@ -332,7 +332,7 @@ body {
   border-collapse: collapse;
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .table th,
