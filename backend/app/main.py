@@ -28,8 +28,9 @@ from .collector.polling_collector import PollingCollector
 from .db import DBWriter, get_database_url
 from .enrichment import EnrichmentService
 from .mitre import best_match, map_event
-from .models import Event
+from .models import Event, IDSAlert
 from .cve_store import CVEStore
+from .ids_snort import SnortJsonTailer
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
 
@@ -65,6 +66,9 @@ class AppState:
             "cve_match_enabled": True,
             "cve_min_severity": "HIGH",
             "cve_match_strict": True,
+            "ids_enabled": False,
+            "ids_engine": "snort",
+            "ids_log_path": "",
         }
         self.status: Dict[str, object] = {
             "collector": "none",
@@ -85,6 +89,8 @@ class AppState:
         self.enrichment: Optional[EnrichmentService] = None
         self.db_writer: Optional[DBWriter] = None
         self.cve_store: Optional[CVEStore] = None
+        self.ids_buffer: Deque[Dict[str, object]] = deque(maxlen=5000)
+        self.ids_tailer: Optional[SnortJsonTailer] = None
 
     def enrich_event(self, event: Event) -> None:
         if self.enrichment is not None:
@@ -101,6 +107,9 @@ class AppState:
         if self.loop is None:
             return
         self.loop.call_soon_threadsafe(asyncio.create_task, self._broadcast(event))
+
+    def enqueue_ids(self, alert: Dict[str, object]) -> None:
+        self.ids_buffer.append(alert)
 
     async def _broadcast(self, event: Event) -> None:
         dead: List[WebSocket] = []
@@ -355,6 +364,16 @@ def _summary(events: List[Event]) -> Dict[str, object]:
         },
         "cve_high_hits": cve_high,
         "cve_medium_hits": cve_medium,
+    }
+
+
+def _ids_stats(alerts: List[Dict[str, object]]) -> Dict[str, object]:
+    by_class = Counter([a.get("classification", "") for a in alerts if a.get("classification")])
+    by_priority = Counter([a.get("priority", 0) for a in alerts])
+    return {
+        "by_classification": [{"classification": k, "count": v} for k, v in by_class.most_common(8)],
+        "by_priority": [{"priority": k, "count": v} for k, v in by_priority.most_common(8)],
+        "total": len(alerts),
     }
 
 
@@ -626,6 +645,15 @@ async def lifespan(_: FastAPI):
         state.cve_store = CVEStore(db_url)
         state.cve_store.start()
 
+    ids_enabled = bool(state.config.get("ids_enabled", False))
+    ids_engine = str(state.config.get("ids_engine") or "snort").lower()
+    ids_path = str(state.config.get("ids_log_path") or os.getenv("IDS_LOG_PATH", "")).strip()
+    if ids_enabled and ids_engine == "snort" and ids_path:
+        def _push_ids(alert: IDSAlert) -> None:
+            state.enqueue_ids(alert.model_dump())
+        state.ids_tailer = SnortJsonTailer(ids_path, _push_ids)
+        state.ids_tailer.start()
+
     if ETWCollector.available():
         state.collector = ETWCollector(state, state.collector_stop)
         state.status["collector"] = "etw"
@@ -647,6 +675,8 @@ async def lifespan(_: FastAPI):
             state.db_writer.stop()
         if state.cve_store is not None:
             state.cve_store.stop()
+        if state.ids_tailer is not None:
+            state.ids_tailer.stop()
         if state.enrichment is not None:
             state.enrichment.stop()
         if hasattr(state.collector, "stop"):
@@ -707,6 +737,17 @@ async def set_config(payload: Dict[str, object]) -> JSONResponse:
 async def history(limit: int = 500) -> JSONResponse:
     events = list(state.buffer)[-limit:]
     return JSONResponse([e.model_dump() for e in events])
+
+
+@app.get("/ids/alerts")
+async def ids_alerts(limit: int = 200) -> JSONResponse:
+    alerts = list(state.ids_buffer)[-limit:]
+    return JSONResponse(alerts)
+
+
+@app.get("/ids/stats")
+async def ids_stats() -> JSONResponse:
+    return JSONResponse(_ids_stats(list(state.ids_buffer)))
 
 
 @app.get("/query")

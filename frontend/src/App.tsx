@@ -96,6 +96,9 @@ type ConfigPayload = {
   cve_match_enabled?: boolean;
   cve_min_severity?: string;
   cve_match_strict?: boolean;
+  ids_enabled?: boolean;
+  ids_engine?: string;
+  ids_log_path?: string;
 };
 
 const API_PORT = (import.meta as any).env?.VITE_API_PORT ?? "8787";
@@ -105,7 +108,7 @@ const GRAFANA_URL = (import.meta as any).env?.VITE_GRAFANA_URL ?? "http://localh
 const APP_VERSION = (globalThis as any).__APP_VERSION__ ?? "dev";
 
 export default function App() {
-  const [page, setPage] = useState<"realtime" | "insights" | "audit" | "vulns" | "grafana" | "settings">("realtime");
+  const [page, setPage] = useState<"realtime" | "insights" | "audit" | "vulns" | "ids" | "grafana" | "settings">("realtime");
   const [events, setEvents] = useState<EventItem[]>([]);
   const [paused, setPaused] = useState(false);
   const [showSuppressed, setShowSuppressed] = useState(false);
@@ -118,6 +121,8 @@ export default function App() {
   const [cveResults, setCveResults] = useState<Array<Record<string, any>>>([]);
   const [cveStats, setCveStats] = useState<{ by_severity?: { severity: string; count: number }[] }>({});
   const [cveImportStatus, setCveImportStatus] = useState<string>("");
+  const [idsAlerts, setIdsAlerts] = useState<Array<Record<string, any>>>([]);
+  const [idsStats, setIdsStats] = useState<{ by_classification?: { classification: string; count: number }[]; by_priority?: { priority: number; count: number }[]; total?: number }>({});
   const [config, setConfig] = useState<ConfigPayload>({});
   const [saveStatus, setSaveStatus] = useState<string>("");
   const wsRef = useRef<WebSocket | null>(null);
@@ -217,6 +222,19 @@ export default function App() {
     setCveStats(data || {});
   };
 
+  const loadIds = async () => {
+    const resp = await fetch(`${API_URL}/ids/alerts?limit=200`);
+    if (resp.ok) {
+      const data = await resp.json();
+      setIdsAlerts(Array.isArray(data) ? data : []);
+    }
+    const statsResp = await fetch(`${API_URL}/ids/stats`);
+    if (statsResp.ok) {
+      const data = await statsResp.json();
+      setIdsStats(data || {});
+    }
+  };
+
   const importCves = async () => {
     setCveImportStatus("Importing...");
     const resp = await fetch(`${API_URL}/cve/import`, { method: "POST" });
@@ -285,6 +303,7 @@ export default function App() {
                 <button className={`tab ${page === "insights" ? "tab-active" : ""}`} onClick={() => setPage("insights")}>Insights</button>
                 <button className={`tab ${page === "audit" ? "tab-active" : ""}`} onClick={() => setPage("audit")}>Audit</button>
                 <button className={`tab ${page === "vulns" ? "tab-active" : ""}`} onClick={() => { setPage("vulns"); loadCveStats(); }}>Vulns</button>
+                <button className={`tab ${page === "ids" ? "tab-active" : ""}`} onClick={() => { setPage("ids"); loadIds(); }}>IDS/IPS</button>
               </div>
             </div>
             <div className="info-box">
@@ -319,7 +338,80 @@ export default function App() {
         </div>
       )}
 
-      {page === "vulns" ? (
+      {page === "ids" ? (
+        <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[320px_1fr]">
+          <aside className="panel space-y-6">
+            <div>
+              <div className="panel-title">IDS Status</div>
+              <div className="space-y-2 text-sm">
+                <div>Total alerts: {idsStats.total ?? 0}</div>
+              </div>
+            </div>
+            <div>
+              <div className="panel-title">By Classification</div>
+              <div className="space-y-2 text-sm">
+                {(idsStats.by_classification ?? []).map((row, idx) => (
+                  <div key={idx} className="row">
+                    <span>{row.classification || "-"}</span>
+                    <span className="muted">{row.count}</span>
+                  </div>
+                ))}
+                {(!idsStats.by_classification || idsStats.by_classification.length === 0) && (
+                  <div className="muted">No IDS alerts yet</div>
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="panel-title">By Priority</div>
+              <div className="space-y-2 text-sm">
+                {(idsStats.by_priority ?? []).map((row, idx) => (
+                  <div key={idx} className="row">
+                    <span>{row.priority}</span>
+                    <span className="muted">{row.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
+
+          <section className="panel space-y-6">
+            <div className="panel-title">Alerts</div>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Signature</th>
+                    <th>Class</th>
+                    <th>Priority</th>
+                    <th>Src</th>
+                    <th>Dst</th>
+                    <th>Proto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {idsAlerts.map((row, idx) => (
+                    <tr key={idx}>
+                      <td>{row.ts ? new Date(row.ts).toLocaleTimeString() : "-"}</td>
+                      <td>{row.signature || "-"}</td>
+                      <td>{row.classification || "-"}</td>
+                      <td>{row.priority ?? "-"}</td>
+                      <td>{row.src_ip}:{row.src_port}</td>
+                      <td>{row.dst_ip}:{row.dst_port}</td>
+                      <td>{row.proto || "-"}</td>
+                    </tr>
+                  ))}
+                  {idsAlerts.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="muted">No IDS alerts loaded</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </main>
+      ) : page === "vulns" ? (
         <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[320px_1fr]">
           <aside className="panel space-y-6">
             <div>
@@ -571,6 +663,27 @@ export default function App() {
                   <option value="MEDIUM">MEDIUM</option>
                   <option value="LOW">LOW</option>
                 </select>
+              </div>
+            </div>
+
+            <div>
+              <div className="panel-title">IDS / IPS</div>
+              <div className="field">
+                <label>Enable IDS</label>
+                <select className="input" value={String(config.ids_enabled ?? false)} onChange={(e) => updateConfig("ids_enabled", e.target.value === "true")}>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Engine</label>
+                <select className="input" value={String(config.ids_engine ?? "snort")} onChange={(e) => updateConfig("ids_engine", e.target.value)}>
+                  <option value="snort">snort</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Snort JSON Log Path</label>
+                <input className="input" value={String(config.ids_log_path || "")} onChange={(e) => updateConfig("ids_log_path", e.target.value)} />
               </div>
             </div>
 
