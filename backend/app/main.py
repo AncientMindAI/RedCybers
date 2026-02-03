@@ -12,6 +12,7 @@ import time
 from typing import Deque, Dict, List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from openpyxl import Workbook
 
@@ -246,6 +247,13 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="RedCybers", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5177", "http://127.0.0.1:5177"],
+    allow_credentials=True,
+    allow_methods=["*"] ,
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
