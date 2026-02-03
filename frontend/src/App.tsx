@@ -114,6 +114,8 @@ export default function App() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [paused, setPaused] = useState(false);
   const [showSuppressed, setShowSuppressed] = useState(false);
+  const [showTimeWait, setShowTimeWait] = useState(false);
+  const [onlyEstablished, setOnlyEstablished] = useState(true);
   const [filter, setFilter] = useState("");
   const [health, setHealth] = useState<Health | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -128,9 +130,25 @@ export default function App() {
   const [config, setConfig] = useState<ConfigPayload>({});
   const [saveStatus, setSaveStatus] = useState<string>("");
   const wsRef = useRef<WebSocket | null>(null);
+  const lastNonEmptyFiltered = useRef<EventItem[]>([]);
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "failed">("connecting");
   const epsActive = (health?.events_per_sec ?? 0) > 0.1;
   const [showAbout, setShowAbout] = useState(false);
+  const MAX_EVENTS = 2000;
+  const eventKey = (e: EventItem) =>
+    `${e.ts}|${e.pid}|${e.local_ip}|${e.local_port}|${e.remote_ip}|${e.remote_port}|${e.state}`;
+  const mergeEvents = (prev: EventItem[], incoming: EventItem[]) => {
+    if (incoming.length === 0) return prev;
+    const map = new Map<string, EventItem>();
+    for (const item of prev) {
+      map.set(eventKey(item), item);
+    }
+    for (const item of incoming) {
+      map.set(eventKey(item), item);
+    }
+    const merged = Array.from(map.values()).sort((a, b) => b.ts.localeCompare(a.ts));
+    return merged.slice(0, MAX_EVENTS);
+  };
 
   useEffect(() => {
     const load = () => {
@@ -157,10 +175,7 @@ export default function App() {
       try {
         const payload = JSON.parse(msg.data as string);
         if (payload.type === "event") {
-          setEvents((prev) => {
-            const next = [payload.data as EventItem, ...prev];
-            return next.slice(0, 200);
-          });
+          setEvents((prev) => mergeEvents(prev, [payload.data as EventItem]));
         }
       } catch {
         // ignore malformed frames
@@ -179,16 +194,26 @@ export default function App() {
     if (page !== "realtime") return;
     if (wsStatus === "connected") return;
     const id = setInterval(() => {
-      fetch(`${API_URL}/history?limit=200`)
+      fetch(`${API_URL}/history?limit=2000`)
         .then((r) => r.json())
-        .then((data) => Array.isArray(data) && setEvents(data.reverse()))
+        .then((data) => {
+          if (!Array.isArray(data)) return;
+          const incoming = data.reverse();
+          setEvents((prev) => mergeEvents(prev, incoming));
+        })
         .catch(() => null);
-    }, 2000);
+    }, 5000);
     return () => clearInterval(id);
   }, [page, wsStatus]);
 
   const filtered = useMemo(() => {
-    const base = showSuppressed ? events : events.filter(e => !e.suppressed);
+    let base = showSuppressed ? events : events.filter(e => !e.suppressed);
+    const state = (e: EventItem) => String(e.state || "").toUpperCase();
+    if (onlyEstablished) {
+      base = base.filter(e => state(e) === "ESTABLISHED");
+    } else if (!showTimeWait) {
+      base = base.filter(e => state(e) !== "TIME_WAIT");
+    }
     if (!filter.trim()) return base;
     const f = filter.toLowerCase();
     return base.filter(e =>
@@ -199,7 +224,15 @@ export default function App() {
       (e.remote_org ?? "").toLowerCase().includes(f) ||
       (e.mitre_technique_id ?? "").toLowerCase().includes(f)
     );
-  }, [events, filter, showSuppressed]);
+  }, [events, filter, showSuppressed, showTimeWait, onlyEstablished]);
+
+  const visible = useMemo(() => {
+    if (filtered.length > 0) {
+      lastNonEmptyFiltered.current = filtered;
+      return filtered;
+    }
+    return lastNonEmptyFiltered.current;
+  }, [filtered]);
 
   const exportXlsx = () => {
     window.open(`${API_URL}/export/xlsx`, "_blank");
@@ -896,6 +929,22 @@ export default function App() {
                 />
                 <span>Show suppressed</span>
               </div>
+              <div className="mt-2 flex items-center gap-2 text-xs text-white/70">
+                <input
+                  type="checkbox"
+                  checked={onlyEstablished}
+                  onChange={(e) => setOnlyEstablished(e.target.checked)}
+                />
+                <span>Only ESTABLISHED</span>
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-xs text-white/70">
+                <input
+                  type="checkbox"
+                  checked={showTimeWait}
+                  onChange={(e) => setShowTimeWait(e.target.checked)}
+                />
+                <span>Show TIME_WAIT</span>
+              </div>
               <div className="mt-4 space-y-2 text-sm text-white/70">
                 <div>Status: {health?.collector ?? "-"}</div>
                 <div>Events: {health?.events_total ?? 0}</div>
@@ -931,12 +980,12 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((e, i) => {
+                  {visible.map((e, i) => {
                     const key = rowKey(e, i);
                     const expanded = expandedKey === key;
                     return (
                       <Fragment key={key}>
-                        <tr className={`row-click ${e.suppressed ? "row-suppressed" : ""} ${e.cve_max_severity ? "row-cve" : ""}`} onClick={() => toggleRow(key)}>
+                        <tr className={`row-click ${e.suppressed ? "row-suppressed" : ""} ${e.cve_max_severity ? "row-cve" : ""} ${e.process_name === "unknown" ? "row-unknown" : ""}`} onClick={() => toggleRow(key)}>
                           <td>{new Date(e.ts).toLocaleTimeString()}</td>
                           <td>{e.process_name}</td>
                           <td>{e.pid}</td>
