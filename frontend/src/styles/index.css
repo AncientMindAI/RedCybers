@@ -82,6 +82,11 @@ body {
   border: 1px solid rgba(63,255,177,0.35);
 }
 
+.grafana-link {
+  width: auto;
+  padding: 8px 14px;
+}
+
 .badge {
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.12);
@@ -106,15 +111,126 @@ body {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.18em;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.12);
   background: rgba(255,255,255,0.04);
+  transition: all 0.2s ease;
 }
 
 .tab-active {
   border-color: rgba(63,255,177,0.45);
   color: #3fffb1;
+  box-shadow: 0 0 14px rgba(63,255,177,0.25);
+}
+
+.tab:hover {
+  border-color: rgba(63,255,177,0.25);
+}
+
+.tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tab-soon {
+  position: relative;
+  padding-right: 22px;
+}
+
+.tab-soon::after {
+  content: "soon";
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.nav-label {
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+  padding-left: 6px;
+}
+
+.tab-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.info-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.28);
+  border: 1px solid rgba(255,255,255,0.08);
+  min-width: 150px;
+}
+
+.info-title {
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+}
+
+.info-row {
+  font-size: 12px;
+  color: rgba(255,255,255,0.75);
+}
+
+.link-pill {
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid rgba(63,255,177,0.35);
+  color: #3fffb1;
+  padding: 4px 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.04);
+}
+
+.status-ok {
+  color: #3fffb1;
+  border-color: rgba(63,255,177,0.45);
+  box-shadow: 0 0 14px rgba(63,255,177,0.2);
+}
+
+.status-warn {
+  color: #ffb347;
+  border-color: rgba(255,179,71,0.45);
+  box-shadow: 0 0 14px rgba(255,179,71,0.2);
 }
 
 .row {
@@ -200,6 +316,19 @@ body {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px 18px;
   padding: 6px 2px;
+}
+
+.grafana-frame-wrap {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.2);
+}
+
+.grafana-frame {
+  width: 100%;
+  height: 75vh;
+  border: 0;
 }
 
 @media (max-width: 900px) {

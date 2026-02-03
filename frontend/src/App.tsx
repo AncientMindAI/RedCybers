@@ -74,9 +74,10 @@ type ConfigPayload = {
 const API_PORT = (import.meta as any).env?.VITE_API_PORT ?? "8787";
 const API_URL = `http://127.0.0.1:${API_PORT}`;
 const WS_URL = `ws://127.0.0.1:${API_PORT}/stream`;
+const GRAFANA_URL = (import.meta as any).env?.VITE_GRAFANA_URL ?? "http://localhost:3000";
 
 export default function App() {
-  const [page, setPage] = useState<"realtime" | "insights" | "settings">("realtime");
+  const [page, setPage] = useState<"realtime" | "insights" | "grafana" | "settings">("realtime");
   const [events, setEvents] = useState<EventItem[]>([]);
   const [paused, setPaused] = useState(false);
   const [filter, setFilter] = useState("");
@@ -87,6 +88,7 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState<string>("");
   const wsRef = useRef<WebSocket | null>(null);
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "failed">("connecting");
+  const epsActive = (health?.events_per_sec ?? 0) > 0.1;
 
   useEffect(() => {
     const load = () => {
@@ -198,22 +200,53 @@ export default function App() {
             <div className="text-xs text-white/50">Connected to backend: {health?.host ?? "127.0.0.1"}:{health?.port ?? API_PORT}</div>
           </div>
           <div className="flex items-center gap-3">
-            <button className={`tab ${page === "realtime" ? "tab-active" : ""}`} onClick={() => setPage("realtime")}>Real-time</button>
-            <button className={`tab ${page === "insights" ? "tab-active" : ""}`} onClick={() => setPage("insights")}>Insights</button>
-            <button className={`tab ${page === "settings" ? "tab-active" : ""}`} onClick={() => setPage("settings")}>Settings</button>
-            <span className="badge">collector: {health?.collector ?? "-"}</span>
-            <span className={`badge ${health?.privileged ? "badge-ok" : "badge-warn"}`}>
-              {health?.privileged ? "privileged" : "unprivileged"}
-            </span>
-            <span className="badge">eps: {health?.events_per_sec?.toFixed(1) ?? "-"}</span>
-            <span className={`badge ${wsStatus === "connected" ? "badge-ok" : "badge-warn"}`}>
-              ws: {wsStatus}
-            </span>
+            <div className="nav-group">
+              <div className="nav-label">Ops</div>
+              <div className="tab-row">
+                <button className={`tab ${page === "realtime" ? "tab-active" : ""}`} onClick={() => setPage("realtime")}>Real-time</button>
+                <button className={`tab ${page === "grafana" ? "tab-active" : ""}`} onClick={() => setPage("grafana")}>Dashboard</button>
+                <button className={`tab ${page === "insights" ? "tab-active" : ""}`} onClick={() => setPage("insights")}>Insights</button>
+              </div>
+            </div>
+            <div className="info-box">
+              <div className="info-title">Config</div>
+              <div className="info-row">collector: {health?.collector ?? "-"}</div>
+              <button className="link-pill" onClick={() => setPage("settings")}>Settings</button>
+            </div>
+            <div className="info-box">
+              <div className="info-title">System Health</div>
+              <div className={`status-pill ${health?.privileged ? "status-ok" : "status-warn"}`}>
+                {health?.privileged ? "privileged" : "unprivileged"}
+              </div>
+              <div className={`status-pill ${epsActive ? "status-ok" : "status-warn"}`}>
+                eps: {health?.events_per_sec?.toFixed(1) ?? "-"}
+              </div>
+              <div className={`status-pill ${wsStatus === "connected" ? "status-ok" : "status-warn"}`}>
+                ws: {wsStatus}
+              </div>
+            </div>
           </div>
         </div>
       </header>
 
-      {page === "settings" ? (
+      {page === "grafana" ? (
+        <main className="mx-auto max-w-6xl px-6 py-8">
+          <section className="panel space-y-4">
+            <div className="row">
+              <div className="panel-title">Grafana Dashboards</div>
+              <a className="btn btn-outline grafana-link" href={GRAFANA_URL} target="_blank" rel="noreferrer">
+                Open in new tab
+              </a>
+            </div>
+            <div className="muted text-xs">
+              If the embed is blocked, open Grafana directly at {GRAFANA_URL}.
+            </div>
+            <div className="grafana-frame-wrap">
+              <iframe className="grafana-frame" src={GRAFANA_URL} title="Grafana" />
+            </div>
+          </section>
+        </main>
+      ) : page === "settings" ? (
         <main className="mx-auto max-w-3xl px-6 py-8">
           <section className="panel space-y-6">
             <div>
@@ -280,9 +313,6 @@ export default function App() {
                 <div>Events (total): {health?.events_total ?? 0}</div>
                 <div>Events/sec: {health?.events_per_sec?.toFixed(1) ?? "-"}</div>
               </div>
-              <div className="mt-4">
-                <button className="btn btn-outline" onClick={exportXlsx}>Export XLSX</button>
-              </div>
             </div>
 
             <div>
@@ -312,6 +342,18 @@ export default function App() {
                 {(!summary?.top_countries || summary.top_countries.length === 0) && (
                   <div className="muted">No geo data yet</div>
                 )}
+              </div>
+            </div>
+
+            <div>
+              <div className="panel-title">Audit</div>
+              <div className="space-y-3 text-sm">
+                <div className="muted">Export current telemetry for investigations and reporting.</div>
+                <div className="row">
+                  <button className="tab tab-soon" disabled>Investigations</button>
+                  <button className="tab tab-soon" disabled>Reports</button>
+                </div>
+                <button className="btn btn-outline" onClick={exportXlsx}>Export XLSX</button>
               </div>
             </div>
           </aside>
@@ -375,9 +417,6 @@ export default function App() {
               <div className="mt-4 flex gap-2">
                 <button className="btn" onClick={() => setPaused(p => !p)}>
                   {paused ? "Resume" : "Pause"}
-                </button>
-                <button className="btn btn-outline" onClick={exportXlsx}>
-                  Export XLSX
                 </button>
               </div>
             </div>
