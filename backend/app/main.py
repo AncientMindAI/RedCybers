@@ -3,6 +3,7 @@
 from collections import Counter, deque
 from contextlib import asynccontextmanager
 import asyncio
+import json
 import logging
 import os
 import socket
@@ -33,6 +34,15 @@ class AppState:
             "direction": "outbound",
             "allow_list": [],
             "deny_list": [],
+            "ipinfo_key": "",
+            "abuseipdb_key": "",
+            "otx_key": "",
+            "threatfox_key": "",
+            "threatfox_days": 1,
+            "feodo_url": "",
+            "otx_export_url": "",
+            "abuseipdb_confidence_min": "75",
+            "abuseipdb_limit": "100000",
         }
         self.status: Dict[str, object] = {
             "collector": "none",
@@ -85,6 +95,31 @@ class AppState:
 
 
 state = AppState()
+
+
+def _get_config_file() -> str:
+    base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    return os.path.join(base, ".redcybers-config.json")
+
+
+def _load_config() -> Dict[str, object]:
+    path = _get_config_file()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except Exception:
+        return {}
+
+
+def _save_config(data: Dict[str, object]) -> None:
+    path = _get_config_file()
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2)
+    except Exception:
+        logging.warning("failed to write config file: %s", path)
 
 
 def _is_port_free(host: str, port: int) -> bool:
@@ -175,8 +210,12 @@ def _summary(events: List[Event]) -> Dict[str, object]:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     state.loop = asyncio.get_running_loop()
+    persisted = _load_config()
+    if persisted:
+        state.config.update(persisted)
+
     state.enrichment = EnrichmentService(state.collector_stop)
-    state.enrichment.start()
+    state.enrichment.start(state.config)
 
     if ETWCollector.available():
         state.collector = ETWCollector(state, state.collector_stop)
@@ -238,6 +277,9 @@ async def get_config() -> JSONResponse:
 @app.post("/config")
 async def set_config(payload: Dict[str, object]) -> JSONResponse:
     state.config.update(payload)
+    _save_config(state.config)
+    if state.enrichment is not None:
+        state.enrichment.apply_config(state.config)
     return JSONResponse(state.config)
 
 

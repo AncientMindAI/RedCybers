@@ -48,6 +48,13 @@ def _score_event(event: Event) -> int:
     return min(score, 100)
 
 
+def _get_override(config: Dict[str, object], key: str, env_key: str) -> str:
+    value = str(config.get(key, "") or "").strip()
+    if value:
+        return value
+    return os.getenv(env_key, "").strip()
+
+
 class ThreatFeed:
     def __init__(
         self,
@@ -77,14 +84,17 @@ class ThreatFeedManager:
         self._ip_sets: Dict[str, Set[str]] = {}
         self._thread: Optional[threading.Thread] = None
 
-    def configure(self) -> None:
+    def configure(self, overrides: Optional[Dict[str, object]] = None) -> None:
+        overrides = overrides or {}
         self._feeds = []
-        abuse_key = os.getenv("ABUSEIPDB_API_KEY", "").strip()
-        otx_key = os.getenv("OTX_API_KEY", "").strip()
-        threatfox_key = os.getenv("THREATFOX_API_KEY", "").strip()
-        abuse_min = os.getenv("ABUSEIPDB_CONFIDENCE_MIN", "75").strip()
-        abuse_limit = os.getenv("ABUSEIPDB_LIMIT", "100000").strip()
-        threatfox_days = int(os.getenv("THREATFOX_DAYS", "1").strip() or 1)
+        abuse_key = _get_override(overrides, "abuseipdb_key", "ABUSEIPDB_API_KEY")
+        otx_key = _get_override(overrides, "otx_key", "OTX_API_KEY")
+        threatfox_key = _get_override(overrides, "threatfox_key", "THREATFOX_API_KEY")
+
+        abuse_min = str(overrides.get("abuseipdb_confidence_min") or os.getenv("ABUSEIPDB_CONFIDENCE_MIN", "75")).strip()
+        abuse_limit = str(overrides.get("abuseipdb_limit") or os.getenv("ABUSEIPDB_LIMIT", "100000")).strip()
+        threatfox_days_raw = str(overrides.get("threatfox_days") or os.getenv("THREATFOX_DAYS", "1")).strip()
+        threatfox_days = int(threatfox_days_raw or 1)
 
         if abuse_key:
             url = (
@@ -97,16 +107,13 @@ class ThreatFeedManager:
             logging.info("AbuseIPDB disabled (missing ABUSEIPDB_API_KEY)")
 
         if otx_key:
-            url = os.getenv("OTX_EXPORT_URL", "https://otx.alienvault.com/api/v1/indicators/export")
+            url = str(overrides.get("otx_export_url") or os.getenv("OTX_EXPORT_URL", "https://otx.alienvault.com/api/v1/indicators/export"))
             headers = {"X-OTX-API-KEY": otx_key}
             self._feeds.append(ThreatFeed("OTX", url, headers=headers))
         else:
             logging.info("OTX disabled (missing OTX_API_KEY)")
 
-        feodo_url = os.getenv(
-            "FEODO_URL",
-            "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt",
-        )
+        feodo_url = str(overrides.get("feodo_url") or os.getenv("FEODO_URL", "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt"))
         self._feeds.append(ThreatFeed("Feodo", feodo_url))
 
         if threatfox_key:
@@ -202,9 +209,9 @@ class ThreatFeedManager:
 
 
 class IpInfoResolver:
-    def __init__(self, stop_event: threading.Event) -> None:
+    def __init__(self, stop_event: threading.Event, token: str = "") -> None:
         self._stop_event = stop_event
-        self._token = os.getenv("IPINFO_API_KEY", "").strip()
+        self._token = token
         self._queue: queue.Queue[str] = queue.Queue()
         self._cache: Dict[str, Dict[str, object]] = {}
         self._cache_ts: Dict[str, float] = {}
@@ -269,16 +276,29 @@ class IpInfoResolver:
 class EnrichmentService:
     def __init__(self, stop_event: threading.Event) -> None:
         self._stop_event = stop_event
+        self._config: Dict[str, object] = {}
         self.threats = ThreatFeedManager(stop_event)
-        self.ipinfo = IpInfoResolver(stop_event)
+        token = _get_override(self._config, "ipinfo_key", "IPINFO_API_KEY")
+        self.ipinfo = IpInfoResolver(stop_event, token=token)
 
-    def start(self) -> None:
+    def start(self, config: Optional[Dict[str, object]] = None) -> None:
+        if config:
+            self._config.update(config)
+        self.threats.configure(self._config)
         self.threats.start()
+        token = _get_override(self._config, "ipinfo_key", "IPINFO_API_KEY")
+        self.ipinfo = IpInfoResolver(self._stop_event, token=token)
         self.ipinfo.start()
 
     def stop(self) -> None:
         self.threats.stop()
         self.ipinfo.stop()
+
+    def apply_config(self, config: Dict[str, object]) -> None:
+        self._config.update(config)
+        self.stop()
+        self._stop_event.clear()
+        self.start(self._config)
 
     def enrich(self, event: Event) -> None:
         event.is_public = is_public_ip(event.remote_ip)

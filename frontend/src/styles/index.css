@@ -53,6 +53,19 @@ body {
   font-size: 14px;
 }
 
+.field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.field label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: rgba(255,255,255,0.5);
+}
+
 .btn {
   width: 100%;
   background: linear-gradient(135deg, #3fffb1 0%, #36a7ff 100%);
@@ -87,6 +100,21 @@ body {
 .badge-warn {
   color: #ffb347;
   border-color: rgba(255,179,71,0.35);
+}
+
+.tab {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+}
+
+.tab-active {
+  border-color: rgba(63,255,177,0.45);
+  color: #3fffb1;
 }
 
 .row {
