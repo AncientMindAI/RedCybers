@@ -106,7 +106,7 @@ type ConfigPayload = {
 const API_PORT = (import.meta as any).env?.VITE_API_PORT ?? "8787";
 const API_URL = `http://127.0.0.1:${API_PORT}`;
 const WS_URL = `ws://127.0.0.1:${API_PORT}/stream`;
-const KIBANA_URL = (import.meta as any).env?.VITE_KIBANA_URL ?? "http://localhost:5602";
+const KIBANA_URL = (import.meta as any).env?.VITE_KIBANA_URL ?? "http://localhost:5601";
 const APP_VERSION = (globalThis as any).__APP_VERSION__ ?? "dev";
 
 export default function App() {

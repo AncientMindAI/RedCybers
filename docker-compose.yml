@@ -45,18 +45,6 @@ services:
       - ./elk/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml
       - ./elk/kibana/redcybers-logo.png:/usr/share/kibana/config/branding/redcybers-logo.png
       - ./elk/kibana/redcybers-favicon.png:/usr/share/kibana/config/branding/redcybers-favicon.png
-  kibana-proxy:
-    image: nginx:1.27-alpine
-    container_name: redcybers-kibana-proxy
-    depends_on:
-      - kibana
-    ports:
-      - "5602:80"
-    volumes:
-      - ./elk/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./elk/nginx/brand.css:/usr/share/nginx/html/brand.css:ro
-      - ./elk/nginx/redcybers-logo.png:/usr/share/nginx/html/redcybers-logo.png:ro
-      - ./elk/nginx/redcybers-favicon.png:/usr/share/nginx/html/redcybers-favicon.png:ro
 volumes:
   redcybers_pg:
   redcybers_es:
