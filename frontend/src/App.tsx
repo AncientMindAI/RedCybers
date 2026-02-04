@@ -419,7 +419,7 @@ export default function App() {
       )}
 
       {page === "elk" ? (
-        <main className="mx-auto max-w-6xl px-6 py-8">
+        <main className="mx-auto max-w-none px-4 py-8">
           <section className="panel space-y-4">
             <div className="row">
               <div className="panel-title">Kibana</div>
