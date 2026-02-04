@@ -509,7 +509,7 @@ export default function App() {
           </section>
         </main>
       ) : page === "vulns" ? (
-        <main className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[320px_1fr]">
+        <main className="mx-auto grid max-w-none gap-6 px-4 py-8 lg:grid-cols-[320px_1fr]">
           <aside className="panel space-y-6">
             <div>
               <div className="panel-title">CVE Import</div>
